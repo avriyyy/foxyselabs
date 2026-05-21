@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .stitch-node-glass {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0) 100%), #27171b;
+    backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .stitch-node-glass:hover {
+    border-color: rgba(255, 0, 127, 0.2);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 20px rgba(255, 0, 127, 0.12);
+  }
+  .btn-cyber-pink {
+    background-color: transparent;
+    border: 1px solid #FF007F;
+    color: #FF007F;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .btn-cyber-pink:hover {
+    background-color: rgba(255, 0, 127, 0.1);
+    box-shadow: 0 0 15px rgba(255, 0, 127, 0.12);
+    transform: scale(1.02);
+  }
+  .btn-primary-filled {
+    background-color: #ff4a8e;
+    color: #590028;
+    border: 1px solid transparent;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .btn-primary-filled:hover {
+    background-color: #FF007F;
+    color: white;
+    box-shadow: 0 0 20px rgba(255, 0, 127, 0.12);
+    transform: scale(1.02);
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-on-surface font-body-md antialiased;
+  }
+}
