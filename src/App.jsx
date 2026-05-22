@@ -103,32 +103,32 @@ function Footer() {
 
 function HomePage({ onNavigate }) {
   return (
-    <main className="flex-grow pt-32 pb-24">
-      <section className="px-margin-mobile md:px-margin-desktop max-w-max-width mx-auto mb-24 md:mb-32">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 lg:gap-16 items-start md:items-center">
+    <main className="flex-grow pt-16 md:pt-20">
+      <section className="min-h-[calc(100vh-4rem)] md:min-h-[calc(100vh-5rem)] px-margin-mobile md:px-margin-desktop max-w-max-width mx-auto flex items-center py-4 md:py-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 lg:gap-16 items-start md:items-center w-full">
           <HeroVisual />
-          <div className="flex flex-col gap-6 md:gap-8">
-            <h1 className="text-display-md lg:text-display-lg text-on-surface">
+          <div className="flex flex-col gap-3 md:gap-4 lg:gap-6">
+            <h1 className="text-[1.5rem] md:text-[1.75rem] lg:text-display-lg text-on-surface">
               Software infrastructure for{" "}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-container to-pink-neon">borderless business.</span>
             </h1>
-            <p className="font-body-md text-body-md text-on-surface-variant max-w-xl">
+            <p className="font-body-md text-[0.8rem] md:text-body-md text-on-surface-variant max-w-xl">
               A modern software platform that helps businesses deliver digital services, automate operations, and accept secure decentralized payments worldwide.
             </p>
-            <div className="flex flex-wrap gap-2 md:gap-3 lg:gap-4 items-center">
-              <button onClick={() => onNavigate("product")} className="btn-primary-filled px-4 md:px-6 lg:px-8 py-2 md:py-3 lg:py-4 rounded-DEFAULT font-label-mono uppercase tracking-wider text-[0.625rem] md:text-[0.7rem] lg:text-label-mono">
+            <div className="flex flex-wrap gap-2 md:gap-3 items-center">
+              <button onClick={() => onNavigate("product")} className="btn-primary-filled px-3 md:px-5 lg:px-8 py-1.5 md:py-2 lg:py-4 rounded-DEFAULT font-label-mono uppercase tracking-wider text-[0.6rem] md:text-[0.65rem] lg:text-label-mono">
                 Go To Product
               </button>
-              <button onClick={() => onNavigate("docs")} className="text-on-surface-variant hover:text-primary transition-colors duration-300 font-label-mono uppercase tracking-wider px-2 md:px-3 lg:px-4 py-2 md:py-3 lg:py-4 flex items-center gap-1.5 md:gap-2 text-[0.625rem] md:text-[0.7rem] lg:text-label-mono">
-                Read Documentation <IconArrowRight className="w-3 h-3 md:w-3.5 md:h-3.5 lg:w-4 lg:h-4" />
+              <button onClick={() => onNavigate("docs")} className="text-on-surface-variant hover:text-primary transition-colors duration-300 font-label-mono uppercase tracking-wider px-2 md:px-3 lg:px-4 py-1.5 md:py-2 lg:py-4 flex items-center gap-1 md:gap-1.5 lg:gap-2 text-[0.6rem] md:text-[0.65rem] lg:text-label-mono">
+                Read Documentation <IconArrowRight className="w-2.5 h-2.5 md:w-3 md:h-3 lg:w-4 lg:h-4" />
               </button>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="px-margin-mobile md:px-margin-desktop max-w-max-width mx-auto mb-24 md:mb-32">
-        <div className="flex flex-col items-center justify-center gap-4 md:gap-6 py-20 md:py-28 lg:py-32">
+      <section className="px-margin-mobile md:px-margin-desktop max-w-max-width mx-auto">
+        <div className="flex flex-col items-center justify-center gap-4 md:gap-6 py-12 md:py-20 lg:py-28">
           <span className="font-label-mono text-label-mono text-pink-neon tracking-widest uppercase">Coming Soon</span>
           <h2 className="text-display-md lg:text-display-lg text-on-surface text-center">
             More Features <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-container to-pink-neon">On The Way</span>

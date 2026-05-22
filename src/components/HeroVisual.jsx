@@ -2,7 +2,7 @@ import Logo from "./Logo"
 
 export default function HeroVisual() {
   return (
-    <div className="relative h-[260px] sm:h-[300px] md:h-[340px] lg:h-[380px] stitch-node-glass rounded-xl overflow-hidden border border-white/5 bg-surface-container-low flex flex-col">
+    <div className="relative h-[180px] sm:h-[240px] md:h-[280px] lg:h-[360px] stitch-node-glass rounded-xl overflow-hidden border border-white/5 bg-surface-container-low flex flex-col">
       <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-white/5 bg-black/20 shrink-0">
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded-full bg-pink-neon/80" />
@@ -18,7 +18,7 @@ export default function HeroVisual() {
       <div className="flex-1 flex items-center justify-center relative overflow-hidden">
         <div className="flex flex-col items-center gap-2 max-w-full px-2">
           <pre
-            className="text-pink-neon/60 leading-relaxed text-center select-none text-[5px] sm:text-[5.5px] md:text-[6px] lg:text-[8px] max-w-full"
+            className="text-pink-neon/60 leading-relaxed text-center select-none text-[4.5px] sm:text-[5px] md:text-[6px] lg:text-[7.5px] max-w-full"
             style={{ fontFamily: "JetBrains Mono, monospace" }}
           >
 {`$$$$$$$$                                                $$\\                $$\\                     
