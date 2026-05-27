@@ -97,6 +97,86 @@ export function IconCross({ className = "" }) {
   )
 }
 
+export function IconClock({ className = "" }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" {...s} className={className}>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  )
+}
+
+export function IconBell({ className = "" }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" {...s} className={className}>
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  )
+}
+
+export function IconChartLine({ className = "" }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" {...s} className={className}>
+      <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+      <polyline points="7 15 11 11 15 14 21 7" />
+      <polyline points="21 10 21 7 18 7" />
+    </svg>
+  )
+}
+
+export function IconWallet({ className = "" }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" {...s} className={className}>
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <path d="M16 12h2" />
+      <circle cx="18" cy="12" r="1" />
+      <path d="M2 9h20" />
+    </svg>
+  )
+}
+
+export function IconSettings({ className = "" }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" {...s} className={className}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  )
+}
+
+export function IconChevronLeft({ className = "" }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" {...s} className={className}>
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  )
+}
+
+export function IconChevronRight({ className = "" }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" {...s} className={className}>
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  )
+}
+
+export function IconCalculator({ className = "" }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" {...s} className={className}>
+      <rect x="4" y="2" width="16" height="20" rx="2" />
+      <line x1="8" y1="6" x2="16" y2="6" />
+      <line x1="8" y1="10" x2="8" y2="10.01" />
+      <line x1="12" y1="10" x2="12" y2="10.01" />
+      <line x1="16" y1="10" x2="16" y2="10.01" />
+      <line x1="8" y1="14" x2="8" y2="14.01" />
+      <line x1="12" y1="14" x2="12" y2="14.01" />
+      <line x1="16" y1="14" x2="16" y2="14.01" />
+      <line x1="8" y1="18" x2="16" y2="18" />
+    </svg>
+  )
+}
+
 export function IconArrowRight({ className = "" }) {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" {...s} className={className}>
