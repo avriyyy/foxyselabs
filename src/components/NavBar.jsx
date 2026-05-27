@@ -160,7 +160,7 @@ export default function NavBar() {
 
   useEffect(() => {
     if (!walletAddress) return
-    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3001"}/api/wallet/${walletAddress}`)
+    fetch(`${import.meta.env.VITE_API_URL || ""}/api/wallet/${walletAddress}`)
       .then((r) => r.json())
       .then((data) => setRole(data.role))
       .catch(() => {})

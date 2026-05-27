@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { MOCK_HISTORY } from "../../utils/mockData"
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:3001"
+const API = import.meta.env.VITE_API_URL || ""
 
 export default function History() {
   const [history, setHistory] = useState(MOCK_HISTORY)

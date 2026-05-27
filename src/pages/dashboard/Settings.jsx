@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { useAccount } from "wagmi"
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:3001"
+const API = import.meta.env.VITE_API_URL || ""
 
 export default function Settings() {
   const { address } = useAccount()

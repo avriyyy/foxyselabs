@@ -10,7 +10,7 @@ import App from './App.jsx'
 
 const config = getDefaultConfig({
   appName: 'FoxyseLabs',
-  projectId: 'foxylabs-arbitrage',
+  projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '5767a2f0fb10904e6317994b758cfce7',
   chains: [mainnet, bsc, avalanche],
   transports: {
     [mainnet.id]: http(),
