@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash   VARCHAR(255) NOT NULL,
     name            VARCHAR(255) NOT NULL,
     role            VARCHAR(32)  NOT NULL DEFAULT 'user',
+    is_admin        BOOLEAN     NOT NULL DEFAULT FALSE,
+    is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
     -- BYOK encrypted at rest (AES-256-GCM, key from ENCRYPTION_KEY env)
     openai_api_key_encrypted     BYTEA,
     anthropic_api_key_encrypted  BYTEA,
@@ -26,6 +28,7 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_is_admin ON users(is_admin);
 
 -- ----------------------------------------------------------------------------
 -- sessions  (server-side session, opaque token)
@@ -46,15 +49,33 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 -- threads  (one thread = one conversation)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS threads (
-    id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    title        VARCHAR(512),
-    archived_at  TIMESTAMPTZ,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title          VARCHAR(512),
+    workspace_path TEXT NOT NULL DEFAULT '/data/workspaces/default',
+    archived_at    TIMESTAMPTZ,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_threads_user_id ON threads(user_id);
 CREATE INDEX IF NOT EXISTS idx_threads_updated_at ON threads(updated_at DESC);
+
+-- ----------------------------------------------------------------------------
+-- workspace_access  (which users can access which workspaces)
+-- Admin can grant any user access to any workspace.
+-- A workspace is identified by its filesystem path.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS workspace_access (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workspace_path TEXT NOT NULL,
+    can_read    BOOLEAN NOT NULL DEFAULT TRUE,
+    can_write   BOOLEAN NOT NULL DEFAULT TRUE,
+    granted_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, workspace_path)
+);
+CREATE INDEX IF NOT EXISTS idx_workspace_access_user_id ON workspace_access(user_id);
 
 -- ----------------------------------------------------------------------------
 -- messages

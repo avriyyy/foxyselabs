@@ -2,22 +2,16 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: string;
-  default_provider: string;
-  default_model: string;
-  has_openai_key: boolean;
-  has_anthropic_key: boolean;
-}
-
-export interface AuthResponse {
-  user: User;
-  access_token: string;
-  expires_at: number;
+  is_admin: boolean;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface Thread {
   id: string;
+  user_id: string;
   title: string | null;
+  workspace_path: string;
   created_at: string;
   updated_at: string;
   archived_at?: string | null;
@@ -39,8 +33,10 @@ export interface ThreadDetail {
   messages: Message[];
 }
 
-// Agent SSE event types
+// Agent / Claude Code SSE event types
+// (mirrors apps/agent/src/claudecode.py)
 export type AgentEvent =
+  | { type: "init"; model: string; tools: string[]; session_id?: string; mcp_servers?: string[] }
   | { type: "thread.start"; thread_id: string }
   | { type: "message.assistant"; delta: string }
   | { type: "thinking.start" }
@@ -48,7 +44,7 @@ export type AgentEvent =
   | { type: "thinking.end" }
   | { type: "tool.start"; id: string; name: string; server?: string; input: unknown }
   | { type: "tool.progress"; id: string; chunk: string }
-  | { type: "tool.end"; id: string; output: unknown; duration_ms: number }
+  | { type: "tool.end"; id: string; output: unknown; duration_ms: number; status?: string }
   | { type: "file.read"; path: string; lines: number }
   | { type: "file.edit"; path: string; action: "create" | "update" | "delete"; diff?: string }
   | { type: "shell.start"; id: string; command: string }

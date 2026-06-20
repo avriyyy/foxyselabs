@@ -49,6 +49,7 @@ references/
 *.swp
 *.swo
 .DS_Store
+session.txt
 
 # Logs
 logs/

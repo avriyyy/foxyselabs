@@ -1,0 +1,4 @@
+{
+  "_comment": "Optional Claude Code settings. For docker-compose deployments, env vars ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL are passed directly to the agent container — this file is for local dev overrides only. Do NOT commit real keys here.",
+  "skipDangerousModePermissionPrompt": true
+}

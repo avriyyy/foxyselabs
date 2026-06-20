@@ -50,25 +50,19 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      agent:
-        condition: service_started
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-foxyse}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-foxyse}
       REDIS_URL: redis://redis:6379/0
-      GATEWAY_PORT: 8080
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
-      AGENT_SERVICE_URL: http://agent:8000
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
-      ACCESS_TOKEN_TTL: 24
-      REFRESH_TOKEN_TTL: 30
-      GIN_MODE: release
+      FOX_GATEWAY_PORT: 8080
+      FOX_PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      FOX_AGENT_SERVICE_URL: http://agent:8000
+      FOX_ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@localhost}
+      FOX_ADMIN_NAME: ${ADMIN_NAME:-Admin}
+      FOX_ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme-on-first-login-please}
     networks:
       - foxynet
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
-    expose:
-      - "8080"
 
   agent:
     build:
@@ -76,16 +70,20 @@ services:
       dockerfile: Dockerfile
     container_name: foxyselabs-agent
     restart: unless-stopped
+    depends_on:
+      - postgres
     environment:
       FOX_AGENT_PORT: 8000
       FOX_LOG_LEVEL: info
-      FOX_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      FOX_ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      FOX_OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
-      FOX_MIMO_API_KEY: ${MIMO_API_KEY:-}
-      FOX_MIMO_BASE_URL: ${MIMO_BASE_URL:-https://api.xiaomimimo.com/v1}
-      FOX_DEFAULT_PROVIDER: ${DEFAULT_PROVIDER:-openai}
-      FOX_DEFAULT_MODEL: ${DEFAULT_MODEL:-gpt-4o-mini}
+      FOX_CLAUDE_MODEL: ${CLAUDE_MODEL:-mimo-v2-flash}
+      FOX_WORKSPACE_ROOT: /data/workspaces
+      FOX_SANDBOX_IMAGE: ${SANDBOX_IMAGE:-ubuntu:24.04}
+      # Passed to the `claude` subprocess as ANTHROPIC_* env
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.xiaomimimo.com/anthropic}
+    volumes:
+      # Workspace data — shared with the host for self-host data persistence
+      - ./data/workspaces:/data/workspaces
     networks:
       - foxynet
     expose:
@@ -100,6 +98,7 @@ services:
     depends_on:
       - gateway
     environment:
+      INTERNAL_GATEWAY_URL: http://gateway:8080
       NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-http://localhost:8080}
       NODE_ENV: production
     ports:

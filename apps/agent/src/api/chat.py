@@ -1,47 +1,54 @@
-"""Chat streaming endpoint."""
+"""Chat streaming endpoint (drives Claude Code subprocess)."""
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from ..llm import litellm_client
+from .. import claudecode
+from ..config import settings
 
 log = logging.getLogger(__name__)
 router = APIRouter()
 
 
 class ChatRequest(BaseModel):
-    thread_id: str
+    thread_id: str | None = None
     user_id: str | None = None
-    messages: list[dict[str, str]] = Field(default_factory=list)
-    provider: str = "openai"
-    model: str = "gpt-4o-mini"
+    content: str
+    workspace: str | None = None
     system_prompt: str | None = None
 
 
 @router.post("/v1/chat/stream")
 async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
     log.info(
-        "chat stream: thread=%s provider=%s model=%s msgs=%d",
-        req.thread_id, req.provider, req.model, len(req.messages),
+        "chat stream: thread=%s workspace=%s prompt_len=%d",
+        req.thread_id, req.workspace, len(req.content or ""),
     )
 
+    workspace = req.workspace or settings.workspace_root
+    if not os.path.isabs(workspace):
+        workspace = os.path.join(settings.workspace_root, workspace)
+    os.makedirs(workspace, exist_ok=True)
+
     async def event_gen() -> Any:
-        async for event in litellm_client.stream_chat(
-            provider=req.provider,
-            model=req.model,
-            messages=req.messages,
+        async for event in claudecode.run_claude(
+            prompt=req.content,
+            workspace_dir=workspace,
+            session_id=req.thread_id,
             system_prompt=req.system_prompt,
         ):
             if await request.is_disconnected():
                 log.info("client disconnected, stopping stream")
                 break
-            yield litellm_client.event_to_sse(event)
+            yield _event_to_sse(event)
 
     return StreamingResponse(
         event_gen(),
@@ -52,3 +59,7 @@ async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
+
+
+def _event_to_sse(event: dict[str, Any]) -> str:
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"

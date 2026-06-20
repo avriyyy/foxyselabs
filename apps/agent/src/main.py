@@ -1,4 +1,8 @@
-"""FoxyseLabs AI Agent service entry point."""
+"""FoxyseLabs AI Agent service entry point.
+
+Drives the Claude Code CLI as a subprocess and streams its output to
+the gateway as SSE events.
+"""
 
 from __future__ import annotations
 
@@ -21,20 +25,23 @@ log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ARG001
-    log.info("agent starting on port %d (default provider=%s model=%s)",
-             settings.agent_port, settings.default_provider, settings.default_model)
+    log.info(
+        "agent starting on port %d (claude=%s model=%s workspace=%s)",
+        settings.agent_port,
+        settings.claude_code_path,
+        settings.claude_model,
+        settings.workspace_root,
+    )
     yield
     log.info("agent shutting down")
 
 
 app = FastAPI(
     title="FoxyseLabs Agent",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
-# Agent is internal — CORS limited to gateway origin. In practice the gateway
-# calls us over the docker network and we don't expose this port publicly.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

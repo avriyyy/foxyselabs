@@ -3,7 +3,9 @@ package handlers
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,28 +14,32 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/foxyselabs/gateway/internal/middleware"
 )
 
 type ChatHandler struct {
-	DB            *pgxpool.Pool
+	DB              *pgxpool.Pool
 	AgentServiceURL string
 }
 
 type chatStreamReq struct {
-	ThreadID    string         `json:"thread_id"`
-	Content     string         `json:"content"`
-	Model       string         `json:"model,omitempty"`
-	Provider    string         `json:"provider,omitempty"`
+	ThreadID     string `json:"thread_id"`
+	Content      string `json:"content"`
+	WorkspaceDir string `json:"workspace"`
 }
 
-// Stream proxies the request to the Python agent and relays SSE events back
-// to the browser. It also persists the user message + final assistant message
-// to the threads/messages tables.
 func (h *ChatHandler) Stream(c *gin.Context) {
-	uid, _ := middleware.UserID(c)
+	// Bootstrap the first user as the owner (self-hosted single-owner mode).
+	threadsH := &ThreadsHandler{DB: h.DB}
+	uid, isAdmin, ok := threadsH.bootstrapUser(c)
+	if !ok {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "setup_required",
+			"message": "No admin user configured. Visit /api/admin/setup first.",
+		})
+		return
+	}
 
 	var req chatStreamReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -45,56 +51,50 @@ func (h *ChatHandler) Stream(c *gin.Context) {
 		return
 	}
 
-	// Resolve thread: create if missing, otherwise verify ownership
-	threadID, err := h.resolveThread(c, uid, req.ThreadID, req.Content)
+	// Resolve or create thread
+	threadID, workspacePath, err := h.resolveThread(c, uid, req.ThreadID, req.Content, req.WorkspaceDir)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not resolve thread"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not resolve thread: " + err.Error()})
 		return
 	}
+
+	// Access check: verify user can access this workspace
+	if !h.userCanAccessWorkspace(c, uid, workspacePath, isAdmin) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "no access to workspace"})
+		return
+	}
+	_ = isAdmin
 
 	// Persist user message
 	userMsgID := uuid.New()
-	now := time.Now()
 	if _, err := h.DB.Exec(c, `
 		INSERT INTO messages (id, thread_id, role, content, created_at)
 		VALUES ($1, $2, 'user', $3, $4)
-	`, userMsgID, threadID, req.Content, now); err != nil {
+	`, userMsgID, threadID, req.Content, time.Now()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not persist user message"})
 		return
 	}
-	h.bumpThread(c, threadID, now)
+	h.bumpThread(c, threadID)
 
-	// Load user settings (default provider/model) for fallback
-	defaultProvider, defaultModel := h.userDefaults(c, uid)
-
-	provider := req.Provider
-	if provider == "" {
-		provider = defaultProvider
-	}
-	model := req.Model
-	if model == "" {
-		model = defaultModel
-	}
-
-	// Load conversation history (last 50 messages) for context
+	// Load history
 	history, err := h.loadHistory(c, threadID, 50)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load history"})
 		return
 	}
 
-	// Build request to agent
+	// Build agent request — single prompt with full history reconstructed
+	// by the agent from previous messages.
+	prompt := buildPromptFromHistory(history, req.Content)
+
 	agentBody, _ := json.Marshal(map[string]any{
-		"thread_id":    threadID.String(),
-		"user_id":      uid.String(),
-		"messages":     history,
-		"provider":     provider,
-		"model":        model,
-		"system_prompt": "You are Foxyse, a helpful AI Agent. Be concise, accurate, and friendly.",
+		"thread_id":  threadID.String(),
+		"user_id":    uid.String(),
+		"content":    prompt,
+		"workspace":  workspacePath,
 	})
 
-	// Call agent
-	httpClient := &http.Client{Timeout: 0} // streaming
+	httpClient := &http.Client{Timeout: 0}
 	agentReq, err := http.NewRequestWithContext(c, "POST", h.AgentServiceURL+"/v1/chat/stream", bytes.NewReader(agentBody))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not build agent request"})
@@ -127,26 +127,22 @@ func (h *ChatHandler) Stream(c *gin.Context) {
 	c.Writer.WriteHeader(http.StatusOK)
 	flusher, _ := c.Writer.(http.Flusher)
 
-	// Persist assistant message
 	asstMsgID := uuid.New()
 	asstCreated := time.Now()
 	var (
-		asstContent  strings.Builder
-		finalModel   string
-		promptToks   int
-		complToks    int
+		asstContent strings.Builder
+		finalModel  string
+		promptToks  int
+		complToks   int
 	)
 
-	// Stream events
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if len(line) == 0 {
 			continue
 		}
-		// Forward line to client
 		if _, err := c.Writer.Write(line); err != nil {
 			break
 		}
@@ -157,7 +153,6 @@ func (h *ChatHandler) Stream(c *gin.Context) {
 			flusher.Flush()
 		}
 
-		// Parse SSE event lines to accumulate assistant content
 		s := string(line)
 		if strings.HasPrefix(s, "data: ") {
 			payload := strings.TrimPrefix(s, "data: ")
@@ -168,16 +163,15 @@ func (h *ChatHandler) Stream(c *gin.Context) {
 					if d, ok := ev["delta"].(string); ok {
 						asstContent.WriteString(d)
 					}
-				case "thread.end":
-					if m, ok := ev["model"].(string); ok {
-						finalModel = m
-					}
 				case "usage":
 					if v, ok := ev["prompt_tokens"].(float64); ok {
 						promptToks = int(v)
 					}
 					if v, ok := ev["completion_tokens"].(float64); ok {
 						complToks = int(v)
+					}
+					if m, ok := ev["model"].(string); ok {
+						finalModel = m
 					}
 				}
 			}
@@ -193,48 +187,47 @@ func (h *ChatHandler) Stream(c *gin.Context) {
 		INSERT INTO messages (id, thread_id, role, content, model_used, prompt_tokens, completion_tokens, created_at)
 		VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7)
 	`, asstMsgID, threadID, finalContent, nullableString(finalModel), promptToks, complToks, asstCreated)
-	h.bumpThread(c, threadID, time.Now())
+	h.bumpThread(c, threadID)
 }
 
-func (h *ChatHandler) resolveThread(c *gin.Context, userID uuid.UUID, threadIDStr, firstMessage string) (uuid.UUID, error) {
+func (h *ChatHandler) resolveThread(c *gin.Context, userID uuid.UUID, threadIDStr, firstMessage, requestedWorkspace string) (uuid.UUID, string, error) {
 	if threadIDStr != "" {
 		id, err := uuid.Parse(threadIDStr)
 		if err != nil {
-			return uuid.Nil, fmt.Errorf("invalid thread id")
+			return uuid.Nil, "", fmt.Errorf("invalid thread id")
 		}
-		// verify ownership
-		var owner uuid.UUID
-		err = h.DB.QueryRow(c, `SELECT user_id FROM threads WHERE id = $1`, id).Scan(&owner)
+		var (
+			owner         uuid.UUID
+			workspacePath string
+		)
+		err = h.DB.QueryRow(c, `SELECT user_id, workspace_path FROM threads WHERE id = $1`, id).Scan(&owner, &workspacePath)
 		if err != nil {
-			return uuid.Nil, err
+			return uuid.Nil, "", err
 		}
 		if owner != userID {
-			return uuid.Nil, fmt.Errorf("forbidden")
+			return uuid.Nil, "", fmt.Errorf("forbidden")
 		}
-		return id, nil
+		return id, workspacePath, nil
 	}
-	// create new
+	// Create new
 	id := uuid.New()
 	title := firstMessage
 	if len(title) > 80 {
 		title = title[:80]
 	}
+	wsPath := requestedWorkspace
+	if wsPath == "" {
+		wsPath = fmt.Sprintf("/data/workspaces/%s", userID.String())
+	}
 	_, err := h.DB.Exec(c, `
-		INSERT INTO threads (id, user_id, title, created_at, updated_at)
-		VALUES ($1, $2, $3, NOW(), NOW())
-	`, id, userID, title)
-	return id, err
+		INSERT INTO threads (id, user_id, title, workspace_path, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NOW(), NOW())
+	`, id, userID, title, wsPath)
+	return id, wsPath, err
 }
 
-func (h *ChatHandler) bumpThread(c *gin.Context, threadID uuid.UUID, t time.Time) {
-	_, _ = h.DB.Exec(c, `UPDATE threads SET updated_at = $1 WHERE id = $2`, t, threadID)
-}
-
-func (h *ChatHandler) userDefaults(c *gin.Context, userID uuid.UUID) (provider, model string) {
-	provider = "openai"
-	model = "gpt-4o-mini"
-	_ = h.DB.QueryRow(c, `SELECT default_provider, default_model FROM users WHERE id = $1`, userID).Scan(&provider, &model)
-	return
+func (h *ChatHandler) bumpThread(c *gin.Context, threadID uuid.UUID) {
+	_, _ = h.DB.Exec(c, `UPDATE threads SET updated_at = $1 WHERE id = $2`, time.Now(), threadID)
 }
 
 type historyMsg struct {
@@ -255,7 +248,6 @@ func (h *ChatHandler) loadHistory(c *gin.Context, threadID uuid.UUID, limit int)
 		return nil, err
 	}
 	defer rows.Close()
-
 	out := make([]historyMsg, 0)
 	for rows.Next() {
 		var role, content string
@@ -267,9 +259,58 @@ func (h *ChatHandler) loadHistory(c *gin.Context, threadID uuid.UUID, limit int)
 	return out, nil
 }
 
+// buildPromptFromHistory: reconstruct a single prompt for Claude Code's
+// stateless --print mode. Claude Code will receive the full conversation
+// in the prompt itself.
+func buildPromptFromHistory(history []historyMsg, newMessage string) string {
+	if len(history) == 0 {
+		return newMessage
+	}
+	var b strings.Builder
+	for _, m := range history {
+		switch m.Role {
+		case "user":
+			b.WriteString("[USER] ")
+		case "assistant":
+			b.WriteString("[ASSISTANT] ")
+		case "tool":
+			b.WriteString("[TOOL RESULT] ")
+		}
+		b.WriteString(m.Content)
+		b.WriteString("\n\n")
+	}
+	b.WriteString("[USER] ")
+	b.WriteString(newMessage)
+	return b.String()
+}
+
+func (h *ChatHandler) userCanAccessWorkspace(c *gin.Context, userID uuid.UUID, workspacePath string, isAdmin bool) bool {
+	if isAdmin {
+		return true
+	}
+	var count int
+	err := h.DB.QueryRow(c, `
+		SELECT COUNT(*) FROM workspace_access
+		WHERE user_id = $1 AND workspace_path = $2 AND can_read = TRUE
+	`, userID, workspacePath).Scan(&count)
+	if err != nil {
+		return false
+	}
+	// Default: every user can access their own /data/workspaces/{user_id}/
+	if count == 0 && strings.HasPrefix(workspacePath, fmt.Sprintf("/data/workspaces/%s", userID.String())) {
+		return true
+	}
+	return count > 0
+}
+
 func nullableString(s string) any {
 	if s == "" {
 		return nil
 	}
 	return s
 }
+
+// Avoid unused-import warnings when trimming.
+var _ = context.Background
+var _ = errors.New
+var _ = pgx.ErrNoRows

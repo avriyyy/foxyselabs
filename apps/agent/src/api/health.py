@@ -7,7 +7,7 @@ router = APIRouter()
 
 @router.get("/healthz")
 async def healthz():
-    return {"ok": True}
+    return {"ok": True, "version": "0.2.0", "agent": "claudecode"}
 
 
 @router.get("/readyz")

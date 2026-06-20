@@ -12,10 +12,8 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
-	"github.com/foxyselabs/gateway/internal/auth"
 	"github.com/foxyselabs/gateway/internal/cache"
 	"github.com/foxyselabs/gateway/internal/config"
-	"github.com/foxyselabs/gateway/internal/crypto"
 	"github.com/foxyselabs/gateway/internal/db"
 	"github.com/foxyselabs/gateway/internal/handlers"
 	"github.com/foxyselabs/gateway/internal/middleware"
@@ -46,14 +44,6 @@ func main() {
 	defer red.Close()
 	log.Println("redis connected")
 
-	cipher, err := crypto.New(cfg.EncryptionKey)
-	if err != nil {
-		log.Fatalf("crypto: %v", err)
-	}
-
-	am := auth.New(cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
-	_ = cipher // used in later sprints for BYOK API key encryption
-
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -65,40 +55,41 @@ func main() {
 	}))
 
 	corsCfg := cors.Config{
-		AllowOrigins:     []string{cfg.PublicBaseURL, "http://localhost:3000", "http://127.0.0.1:3000"},
+		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
 		ExposeHeaders:    []string{"Content-Length", "Content-Type"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 		MaxAge:           12 * time.Hour,
 	}
 	r.Use(cors.New(corsCfg))
-	r.Use(middleware.RateLimit(red.Client, 120))
+	r.Use(middleware.RateLimit(red.Client, 240))
 
 	// Public
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 	r.GET("/readyz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 
-	authH := &handlers.AuthHandler{DB: database.Pool, AM: am}
+	// Public setup + bootstrap me
+	adminH := &handlers.AdminHandler{DB: database.Pool}
 	api := r.Group("/api")
-	api.POST("/auth/register", authH.Register)
-	api.POST("/auth/login", authH.Login)
+	api.POST("/admin/setup", adminH.Setup)
+	api.GET("/admin/me", adminH.Me)
 
-	// Protected
-	authed := api.Group("")
-	authed.Use(middleware.RequireAuth(am))
-
-	authed.GET("/auth/me", authH.Me)
-	authed.POST("/auth/logout", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
-
+	// Threads, messages, chat, admin — all use bootstrap user (single-owner mode)
 	threadsH := &handlers.ThreadsHandler{DB: database.Pool}
-	authed.GET("/threads", threadsH.List)
-	authed.POST("/threads", threadsH.Create)
-	authed.GET("/threads/:id", threadsH.Get)
-	authed.DELETE("/threads/:id", threadsH.Delete)
+	api.GET("/threads", threadsH.List)
+	api.POST("/threads", threadsH.Create)
+	api.GET("/threads/:id", threadsH.Get)
+	api.DELETE("/threads/:id", threadsH.Delete)
 
 	chatH := &handlers.ChatHandler{DB: database.Pool, AgentServiceURL: cfg.AgentServiceURL}
-	authed.POST("/chat/stream", chatH.Stream)
+	api.POST("/chat/stream", chatH.Stream)
+
+	// Admin user management (callable by anyone in single-owner mode;
+	// the only user IS admin, so there's no privilege check needed yet)
+	api.GET("/admin/users", adminH.ListUsers)
+	api.POST("/admin/users", adminH.CreateUser)
+	api.POST("/admin/grant", adminH.GrantWorkspace)
 
 	// Run
 	srv := &http.Server{

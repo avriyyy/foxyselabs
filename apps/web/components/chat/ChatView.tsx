@@ -1,17 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { GATEWAY_URL } from "@/lib/api";
-import { getToken } from "@/lib/client-auth";
+import { PUBLIC_GATEWAY_URL } from "@/lib/api";
 import type { AgentEvent, Message } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
 import { MessageList } from "./MessageList";
 import { InputBar } from "./InputBar";
-
-function authHeaders(): Record<string, string> {
-  const token = getToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 type UiMessage = {
   id: string;
@@ -32,7 +26,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Resolve threadId from URL or set to null (new chat)
   useEffect(() => {
     if (!threadIdFromUrl) {
       setThreadId(null);
@@ -43,7 +36,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
     });
   }, [threadIdFromUrl]);
 
-  // Load thread messages when threadId changes
   useEffect(() => {
     if (!threadId) {
       setMessages([]);
@@ -52,9 +44,8 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${GATEWAY_URL}/api/threads/${threadId}`, {
+        const res = await fetch(`${PUBLIC_GATEWAY_URL}/api/threads/${threadId}`, {
           cache: "no-store",
-          headers: authHeaders(),
         });
         if (!res.ok) throw new Error("Failed to load thread");
         const data = await res.json();
@@ -78,7 +69,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
     };
   }, [threadId]);
 
-  // Auto-scroll on new content
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -89,7 +79,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
     if (!text.trim() || streaming) return;
     setError(null);
 
-    // Optimistic add user message
     const userMsg: UiMessage = {
       id: `tmp-u-${Date.now()}`,
       role: "user",
@@ -98,7 +87,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
     };
     setMessages((m) => [...m, userMsg]);
 
-    // Optimistic add assistant placeholder
     const asstId = `tmp-a-${Date.now()}`;
     setMessages((m) => [
       ...m,
@@ -106,19 +94,13 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
     ]);
     setStreaming(true);
 
-    // Build history for agent (exclude the pending placeholder)
-    const history = messages
-      .filter((m) => !m.pending)
-      .map((m) => ({ role: m.role, content: m.content }));
-    history.push({ role: "user", content: text.trim() });
-
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
     try {
-      const res = await fetch(`${GATEWAY_URL}/api/chat/stream`, {
+      const res = await fetch(`${PUBLIC_GATEWAY_URL}/api/chat/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           thread_id: threadId || undefined,
           content: text.trim(),
@@ -126,6 +108,13 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
         signal: ctrl.signal,
       });
 
+      if (res.status === 503) {
+        const data = await res.json().catch(() => ({}));
+        if (data.error === "setup_required") {
+          window.location.href = "/setup";
+          return;
+        }
+      }
       if (!res.ok || !res.body) {
         const text = await res.text();
         throw new Error(text || `Request failed: ${res.status}`);
@@ -142,7 +131,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
 
-        // Split by SSE event delimiter
         let idx;
         while ((idx = buffer.indexOf("\n\n")) >= 0) {
           const event = buffer.slice(0, idx);
@@ -158,9 +146,7 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
               (delta) => {
                 asstContent += delta;
                 setMessages((curr) =>
-                  curr.map((m) =>
-                    m.id === asstId ? { ...m, content: asstContent } : m
-                  )
+                  curr.map((m) => (m.id === asstId ? { ...m, content: asstContent } : m))
                 );
               },
               (id) => {
@@ -181,17 +167,14 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
                 );
                 window.dispatchEvent(new CustomEvent("foxy:threads-changed"));
               },
-              (err) => {
-                setError(err);
-              }
+              (err) => setError(err)
             );
           } catch {
-            // ignore malformed line
+            // ignore
           }
         }
       }
 
-      // Mark pending as done
       setMessages((curr) =>
         curr.map((m) => (m.id === asstId ? { ...m, pending: false } : m))
       );
@@ -214,7 +197,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
 
   return (
     <section className="flex-1 flex flex-col min-w-0">
-      {/* Header */}
       <div className="h-14 px-5 border-b border-white/5 flex items-center gap-3">
         <span className="w-1.5 h-1.5 rounded-full bg-pink-neon animate-pulse" />
         <p className="font-label-mono text-[0.6rem] uppercase tracking-widest text-pink-neon">
@@ -227,7 +209,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
         )}
       </div>
 
-      {/* Body */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-16 py-6 scrollbar-thin">
         <div className="max-w-3xl mx-auto">
           {messages.length === 0 ? (
@@ -243,7 +224,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
         </div>
       </div>
 
-      {/* Input */}
       <div className="border-t border-white/5 p-4 md:px-16">
         <div className="max-w-3xl mx-auto">
           <InputBar onSend={sendMessage} onStop={stop} streaming={streaming} />
@@ -270,7 +250,7 @@ function handleEvent(
       break;
     case "usage":
       setUsage(
-        ev.model || "openai",
+        ev.model || "claude",
         ev.prompt_tokens || 0,
         ev.completion_tokens || 0
       );
@@ -279,7 +259,6 @@ function handleEvent(
       setError(`${ev.code}: ${ev.message}`);
       break;
     case "thread.end":
-      // stream complete
       break;
   }
 }
