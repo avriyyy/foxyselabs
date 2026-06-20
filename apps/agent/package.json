@@ -1,0 +1,12 @@
+{
+  "name": "@foxyselabs/agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Python AI agent service: FastAPI + LangGraph + LiteLLM.",
+  "scripts": {
+    "dev": "uvicorn src.main:app --reload --port 8000 --host 0.0.0.0",
+    "build": "python -m build",
+    "lint": "ruff check src/ && mypy src/",
+    "test": "pytest"
+  }
+}

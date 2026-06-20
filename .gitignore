@@ -1,31 +1,64 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Go
+*.exe
+*.test
+*.out
+apps/gateway/bin/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+apps/agent/dist/
+apps/agent/*.egg-info/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Data volumes (mounted into containers)
+data/
+!data/.gitkeep
+
+# Legacy code kept locally for reference only
+references/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Test coverage
+coverage/
+.nyc_output/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-.superpowers/
-
-/src/generated/prisma
-
-# Environment
-.env
+# OS
+Thumbs.db

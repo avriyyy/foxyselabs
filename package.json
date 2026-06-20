@@ -1,46 +1,31 @@
 {
   "name": "foxyselabs",
+  "version": "0.1.0",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "dev:server": "node --watch server/index.js",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio",
-    "db:seed": "node server/seed.js"
+  "description": "Self-hosted AI Agent platform (Claude Desktop for the web). MIT licensed.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
   },
-  "dependencies": {
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/adapter-ppg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
-    "@rainbow-me/rainbowkit": "^2.2.11",
-    "@tanstack/react-query": "^5.100.14",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "prisma": "^7.8.0",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "react-router-dom": "^7.15.1",
-    "viem": "^2.51.0",
-    "wagmi": "^2.19.5"
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "dev:web": "pnpm --filter @foxyselabs/web dev",
+    "dev:gateway": "pnpm --filter @foxyselabs/gateway dev",
+    "dev:agent": "pnpm --filter @foxyselabs/agent dev",
+    "build:web": "pnpm --filter @foxyselabs/web build",
+    "build:gateway": "pnpm --filter @foxyselabs/gateway build",
+    "build:agent": "pnpm --filter @foxyselabs/agent build",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:reset": "docker compose down -v && docker compose up -d",
+    "db:migrate": "docker compose exec -T postgres psql -U foxyse -d foxyse -f /docker-entrypoint-initdb.d/0001_init.sql"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.1",
-    "autoprefixer": "^10.5.0",
-    "eslint": "^10.3.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.2",
-    "globals": "^17.6.0",
-    "postcss": "^8.5.15",
-    "tailwindcss": "^3.4.19",
-    "vite": "^8.0.12"
+    "typescript": "^5.6.3"
   }
 }

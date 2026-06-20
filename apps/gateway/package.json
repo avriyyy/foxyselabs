@@ -1,0 +1,12 @@
+{
+  "name": "@foxyselabs/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Go gateway service: auth, files, MCP orchestrator, SSE relay.",
+  "scripts": {
+    "dev": "go run ./cmd/gateway",
+    "build": "go build -o bin/gateway ./cmd/gateway",
+    "lint": "go vet ./...",
+    "test": "go test ./..."
+  }
+}
