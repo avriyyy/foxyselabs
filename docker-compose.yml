@@ -65,6 +65,8 @@ services:
       GIN_MODE: release
     networks:
       - foxynet
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
     expose:
       - "8080"
 

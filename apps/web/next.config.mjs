@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  output: "standalone",
+  // No `output` — we run `next start` in the runner stage. Standalone output
+  // is unreliable with pnpm monorepo layouts because outputFileTracing
+  // struggles with the non-standard node_modules tree.
   experimental: {
     typedRoutes: false,
   },
