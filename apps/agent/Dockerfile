@@ -3,7 +3,8 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_ROOT_USER_ACTION=ignore
 
 WORKDIR /app
 
@@ -19,6 +20,11 @@ RUN pip install --upgrade pip && \
     "litellm>=1.50.0" "sse-starlette>=2.1.0" "httpx>=0.27.0"
 
 COPY src ./src
+
+# Drop privileges — uvicorn runs as appuser.
+RUN useradd -r -u 1001 -m -d /home/appuser appuser && \
+    chown -R appuser:appuser /app
+USER appuser
 
 EXPOSE 8000
 
