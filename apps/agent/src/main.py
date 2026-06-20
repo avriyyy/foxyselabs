@@ -12,8 +12,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import chat, health
+from .api import chat, health, workspace
 from .config import settings
+from .sandbox import sandbox_manager
 
 
 logging.basicConfig(
@@ -26,14 +27,22 @@ log = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ARG001
     log.info(
-        "agent starting on port %d (claude=%s model=%s workspace=%s)",
+        "agent starting on port %d (claude=%s model=%s workspace=%s sandbox=%s)",
         settings.agent_port,
         settings.claude_code_path,
         settings.claude_model,
         settings.workspace_root,
+        "on" if settings.sandbox_enabled else "off",
     )
+    if settings.sandbox_enabled:
+        available = sandbox_manager.is_available()
+        log.info("docker available: %s", available)
+        if available:
+            await sandbox_manager.start_cleanup_loop()
     yield
     log.info("agent shutting down")
+    if settings.sandbox_enabled:
+        await sandbox_manager.stop_cleanup_loop()
 
 
 app = FastAPI(
@@ -51,3 +60,4 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(chat.router)
+app.include_router(workspace.router)

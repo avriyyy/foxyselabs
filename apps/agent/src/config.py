@@ -9,7 +9,15 @@ class Settings(BaseSettings):
 
     # Workspace + sandbox
     workspace_root: str = "/data/workspaces"
-    sandbox_image: str = "ubuntu:24.04"
+    # The host path that the agent's workspace_root maps to. Used when
+    # spawning sandbox containers (which need a host-relative path for
+    # their bind mount). Defaults to the same path; override in compose.
+    workspace_host_root: str = "/data/workspaces"
+    sandbox_image: str = "foxyselabs-sandbox:latest"
+    sandbox_memory_limit: str = "512m"
+    sandbox_cpu_limit: float = 1.0
+    sandbox_idle_timeout_sec: int = 600
+    sandbox_enabled: bool = True  # set FOX_SANDBOX_ENABLED=false to run claude directly (dev)
 
     # Claude Code adapter
     # Default to the container path; auto-detect local user install if absent.

@@ -71,23 +71,45 @@ services:
     container_name: foxyselabs-agent
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       FOX_AGENT_PORT: 8000
       FOX_LOG_LEVEL: info
       FOX_CLAUDE_MODEL: ${CLAUDE_MODEL:-mimo-v2-flash}
       FOX_WORKSPACE_ROOT: /data/workspaces
-      FOX_SANDBOX_IMAGE: ${SANDBOX_IMAGE:-ubuntu:24.04}
-      # Passed to the `claude` subprocess as ANTHROPIC_* env
+      FOX_WORKSPACE_HOST_ROOT: ${WORKSPACE_HOST_ROOT:-/data/workspaces}
+      FOX_SANDBOX_IMAGE: ${SANDBOX_IMAGE:-foxyselabs-sandbox:latest}
+      FOX_SANDBOX_ENABLED: ${SANDBOX_ENABLED:-true}
+      FOX_SANDBOX_MEMORY_LIMIT: ${SANDBOX_MEMORY_LIMIT:-512m}
+      FOX_SANDBOX_CPU_LIMIT: ${SANDBOX_CPU_LIMIT:-1.0}
+      FOX_SANDBOX_IDLE_TIMEOUT_SEC: ${SANDBOX_IDLE_TIMEOUT_SEC:-600}
+      # Passed to the `claude` subprocess (and forwarded to sandbox) as ANTHROPIC_* env
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.xiaomimimo.com/anthropic}
     volumes:
       # Workspace data — shared with the host for self-host data persistence
       - ./data/workspaces:/data/workspaces
+      # Docker socket — required to spawn per-thread sandbox containers
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - foxynet
     expose:
       - "8000"
+
+  # Sandbox base image: built by docker compose so the agent can spawn
+  # per-thread instances of this image. Runs a no-op container so the
+  # image is included in `docker compose up`.
+  sandbox:
+    image: foxyselabs-sandbox:latest
+    container_name: foxyselabs-sandbox-builder
+    build:
+      context: ./apps/agent
+      dockerfile: sandbox.Dockerfile
+    networks:
+      - foxynet
+    command: ["sleep", "infinity"]
+    restart: unless-stopped
 
   web:
     build:

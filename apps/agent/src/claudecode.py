@@ -1,20 +1,10 @@
 """
 Claude Code subprocess adapter.
 
-Spawns `claude --print --output-format stream-json --verbose` and yields
-SSE-ready event dicts that match our AgentEvent protocol. Used by the
-web frontend to render Claude Desktop-style activity.
-
-Claude Code's stream-json event types we translate:
-  - system.init            -> thread.start (with session_id)
-  - system.thinking_tokens -> thinking.delta
-  - system.api_retry       -> error
-  - assistant.message      -> message.assistant (text or thinking content)
-  - tool_use               -> tool.start
-  - tool_result            -> tool.end
-  - result                 -> usage + thread.end
-
-See: https://docs.claude.com/en/docs/claude-code/cli-reference
+Spawns the Claude Code CLI and yields SSE-ready event dicts. When
+sandbox is enabled, the CLI runs inside a per-thread Docker container
+managed by SandboxManager. When disabled, it runs directly on the
+agent host (useful for local dev).
 """
 
 from __future__ import annotations
@@ -28,11 +18,9 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from .config import settings
+from .sandbox import sandbox_manager
 
 log = logging.getLogger(__name__)
-
-# Event types we emit to the gateway/web.
-# Keep in sync with apps/web/lib/types.ts (AgentEvent union).
 
 
 async def run_claude(
@@ -44,14 +32,13 @@ async def run_claude(
     add_dirs: list[str] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """
-    Spawn the `claude` CLI and stream events.
+    Spawn claude and stream its events.
 
     Args:
         prompt: The user message to send.
-        workspace_dir: The thread's working directory (must exist).
-        session_id: Optional session ID to resume / continue. If None, a
-            new session is started.
-        model: Model name (e.g. "mimo-v2-flash"). Defaults to settings.
+        workspace_dir: The thread's working directory.
+        session_id: Optional session ID to resume / continue.
+        model: Model name (e.g. "mimo-v2-flash").
         system_prompt: Optional system prompt to append.
         add_dirs: Additional directories to allow the agent to access.
 
@@ -73,8 +60,6 @@ async def run_claude(
         "--session-id",
         sid,
     ]
-    if settings.claude_settings_file and os.path.exists(settings.claude_settings_file):
-        cmd += ["--settings", settings.claude_settings_file]
     if add_dirs:
         for d in add_dirs:
             cmd += ["--add-dir", d]
@@ -82,21 +67,27 @@ async def run_claude(
         cmd += ["--append-system-prompt", system_prompt]
     cmd += [prompt]
 
-    log.info("spawning claude: session=%s model=%s workspace=%s", sid, chosen_model, workspace_dir)
+    log.info("calling %s model=%s session=%s", settings.claude_code_path, chosen_model, sid[:8])
 
-    # Ensure workspace exists
+    # ----------------------------------------------------------------
+    # Sandbox mode: run claude inside a per-thread Docker container
+    # ----------------------------------------------------------------
+    if settings.sandbox_enabled and sandbox_manager.is_available():
+        async for ev in _run_in_sandbox(
+            sid=sid,
+            cmd=cmd,
+            workspace_dir=workspace_dir,
+            model=chosen_model,
+        ):
+            yield ev
+        return
+
+    # ----------------------------------------------------------------
+    # Local mode: run claude directly as a subprocess on the host.
+    # Used in dev (FOX_SANDBOX_ENABLED=false) or if Docker is unavailable.
+    # ----------------------------------------------------------------
     os.makedirs(workspace_dir, exist_ok=True)
-
-    env = os.environ.copy()
-    # Force the CLI to use only ANTHROPIC_API_KEY (no OAuth/keychain).
-    env["CLAUDE_CODE_SIMPLE"] = "1"
-    # Make sure ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL are passed through
-    # even if the container set them after we imported os.
-    for k in ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"):
-        v = os.environ.get(k)
-        if v:
-            env[k] = v
-
+    env = _build_local_env()
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -106,7 +97,6 @@ async def run_claude(
             env=env,
         )
     except FileNotFoundError:
-        log.error("claude binary not found at %s", settings.claude_code_path)
         yield {"type": "error", "code": "claude_not_found",
                "message": f"claude binary not found at {settings.claude_code_path}"}
         return
@@ -115,33 +105,150 @@ async def run_claude(
         yield {"type": "error", "code": "spawn_failed", "message": str(exc)}
         return
 
-    # Emit thread.start immediately so the web can navigate to the thread URL.
     yield {"type": "thread.start", "thread_id": sid}
+    stderr_task = asyncio.create_task(_drain_stderr(proc))
+    final_text, final_usage, final_model, error_event = (
+        await _read_and_translate(proc, settings.claude_timeout_sec)
+    )
+    stderr_text = await stderr_task
+    if error_event and not final_text:
+        yield error_event
+    elif proc.returncode != 0 and not final_text:
+        yield {"type": "error", "code": f"exit_{proc.returncode}",
+               "message": stderr_text.strip()[:500] or f"claude exited {proc.returncode}"}
+    yield {"type": "usage",
+           "prompt_tokens": final_usage.get("prompt_tokens", 0),
+           "completion_tokens": final_usage.get("completion_tokens", 0),
+           "model": final_model}
+    yield {"type": "thread.end",
+           "reason": "done" if proc.returncode == 0 else "error"}
 
-    # Read stderr in background to surface errors
-    async def drain_stderr() -> str:
-        chunks: list[str] = []
-        if proc.stderr is None:
-            return ""
-        while True:
-            line = await proc.stderr.readline()
-            if not line:
-                break
-            chunks.append(line.decode("utf-8", errors="replace").rstrip())
-        return "\n".join(chunks)
 
-    stderr_task = asyncio.create_task(drain_stderr())
+# --------------------------------------------------------------------
+# Sandbox execution path
+# --------------------------------------------------------------------
 
+async def _run_in_sandbox(
+    sid: str,
+    cmd: list[str],
+    workspace_dir: str,
+    model: str,
+) -> AsyncIterator[dict[str, Any]]:
+    """Run claude inside a per-thread Docker sandbox."""
+    yield {"type": "thread.start", "thread_id": sid}
+    # Start (or get) the container
+    try:
+        info = await asyncio.to_thread(
+            sandbox_manager.get_or_create, sid, workspace_dir
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.exception("failed to start sandbox")
+        yield {"type": "error", "code": "sandbox_start_failed", "message": str(exc)}
+        yield {"type": "thread.end", "reason": "error"}
+        return
+
+    # The exec output from claude CLI is a stream of JSON lines. Use
+    # exec_stream and split on newlines. The real `system.init` event
+    # from claude code will surface the actual model + tools.
     final_text = ""
     final_usage: dict[str, Any] = {}
-    final_model = chosen_model
+    final_model = model
 
+    try:
+        # exec_stream is a sync generator. Wrap in to_thread and yield.
+        def run():
+            return list(
+                sandbox_manager.exec_stream(sid, cmd, workdir="/workspace")
+            )
+
+        chunks = await asyncio.to_thread(run)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("sandbox exec failed")
+        yield {"type": "error", "code": "sandbox_exec_failed", "message": str(exc)}
+        yield {"type": "thread.end", "reason": "error"}
+        return
+
+    # Combine stdout into lines. `chunks` is whatever the SDK yielded
+    # from `exec_stream` — each element is a (label, bytes) tuple like
+    # ('stdout', b'...') or ('stderr', b'...'). We only care about
+    # stdout here.
+    buffer = b""
+    for entry in chunks:
+        if entry is None:
+            continue
+        if isinstance(entry, tuple) and len(entry) >= 2:
+            label, payload = entry[0], entry[1]
+            if label == "stdout" and payload:
+                buffer += payload if isinstance(payload, bytes) else str(payload).encode("utf-8", "replace")
+        elif isinstance(entry, bytes):
+            buffer += entry
+        elif isinstance(entry, str):
+            buffer += entry.encode("utf-8", "replace")
+        else:
+            log.warning("unexpected chunk type from docker exec: %r", type(entry))
+    text = buffer.decode("utf-8", errors="replace")
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            log.warning("non-JSON from sandbox claude: %r", line[:200])
+            continue
+        async for out_ev in _translate_event(ev):
+            if out_ev.get("type") == "message.assistant":
+                d = out_ev.get("delta", "")
+                if isinstance(d, str):
+                    final_text += d
+            if out_ev.get("type") == "usage":
+                final_usage = out_ev
+                final_model = out_ev.get("model", model)
+            yield out_ev
+
+    # The `result` event from claude code already emitted a usage event
+    # with the final token counts. Just close out the thread.
+    yield {"type": "thread.end", "reason": "done"}
+
+
+# --------------------------------------------------------------------
+# Local subprocess helpers
+# --------------------------------------------------------------------
+
+def _build_local_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["CLAUDE_CODE_SIMPLE"] = "1"
+    for k in ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"):
+        v = os.environ.get(k)
+        if v:
+            env[k] = v
+    return env
+
+
+async def _drain_stderr(proc: asyncio.subprocess.Process) -> str:
+    chunks: list[str] = []
+    if proc.stderr is None:
+        return ""
+    while True:
+        line = await proc.stderr.readline()
+        if not line:
+            break
+        chunks.append(line.decode("utf-8", errors="replace").rstrip())
+    return "\n".join(chunks)
+
+
+async def _read_and_translate(
+    proc: asyncio.subprocess.Process,
+    timeout: int,
+) -> tuple[str, dict, str, dict | None]:
+    final_text = ""
+    final_usage: dict[str, Any] = {}
+    final_model = ""
+    error_event: dict | None = None
     try:
         assert proc.stdout is not None
         while True:
-            line = await asyncio.wait_for(
-                proc.stdout.readline(), timeout=settings.claude_timeout_sec
-            )
+            line = await asyncio.wait_for(proc.stdout.readline(), timeout=timeout)
             if not line:
                 break
             text = line.decode("utf-8", errors="replace").strip()
@@ -152,63 +259,36 @@ async def run_claude(
             except json.JSONDecodeError:
                 log.warning("non-JSON line from claude: %r", text[:200])
                 continue
-
             async for out in _translate_event(ev):
-                # Track for finalization
                 if out.get("type") == "message.assistant":
-                    delta = out.get("delta")
-                    if isinstance(delta, str):
-                        final_text += delta
+                    d = out.get("delta")
+                    if isinstance(d, str):
+                        final_text += d
                 if out.get("type") == "usage":
                     final_usage = out
-                    if out.get("model"):
-                        final_model = out["model"]
-                yield out
+                    final_model = out.get("model", final_model)
+                if out.get("type") == "error" and not error_event:
+                    error_event = out
     except asyncio.TimeoutError:
-        log.error("claude timed out after %ss", settings.claude_timeout_sec)
         proc.kill()
-        yield {"type": "error", "code": "timeout",
-               "message": f"claude timed out after {settings.claude_timeout_sec}s"}
     finally:
         try:
             await asyncio.wait_for(proc.wait(), timeout=10)
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
+    return final_text, final_usage, final_model, error_event
 
-        stderr_text = await stderr_task
 
-    # Check exit code
-    if proc.returncode != 0 and not final_text:
-        log.error("claude exited %d, stderr: %s", proc.returncode, stderr_text[:500])
-        yield {
-            "type": "error",
-            "code": f"exit_{proc.returncode}",
-            "message": stderr_text.strip()[:500] or f"claude exited with code {proc.returncode}",
-        }
-
-    # Always emit final thread.end
-    yield {
-        "type": "usage",
-        "prompt_tokens": final_usage.get("prompt_tokens", 0),
-        "completion_tokens": final_usage.get("completion_tokens", 0),
-        "model": final_model,
-    }
-    yield {"type": "thread.end", "reason": "done" if proc.returncode == 0 else "error"}
-
+# --------------------------------------------------------------------
+# Event translation
+# --------------------------------------------------------------------
 
 async def _translate_event(ev: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
-    """
-    Translate one Claude Code stream-json event to one or more of our
-    AgentEvent dicts.
-    """
     et = ev.get("type")
     sub = ev.get("subtype")
 
     if et == "system" and sub == "init":
-        # Don't emit a duplicate thread.start — we already emitted one
-        # from run_claude with the session ID we asked for. But forward
-        # the model + tools so the UI can show them.
         yield {
             "type": "init",
             "model": ev.get("model"),
@@ -219,8 +299,6 @@ async def _translate_event(ev: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
         return
 
     if et == "system" and sub == "thinking_tokens":
-        # MiMo emits thinking content blocks; we surface them as thinking
-        # deltas. The thinking_tokens events are internal accounting.
         return
 
     if et == "system" and sub == "api_retry":
@@ -256,7 +334,6 @@ async def _translate_event(ev: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
         return
 
     if et == "user":
-        # Usually tool_result blocks
         msg = ev.get("message", {}) or {}
         content = msg.get("content", []) or []
         for block in content:
@@ -280,13 +357,6 @@ async def _translate_event(ev: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
         usage = ev.get("usage", {}) or {}
         prompt_tokens = usage.get("input_tokens", 0)
         completion_tokens = usage.get("output_tokens", 0)
-        result_text = ev.get("result", "")
-        # Emit the final text content (Claude Code returns the final
-        # assistant text in the result event when not streaming).
-        if result_text and result_text != final_text():
-            # result_text may duplicate the streamed text; only emit if
-            # we got nothing via assistant events.
-            pass
         yield {
             "type": "usage",
             "prompt_tokens": prompt_tokens,
@@ -295,10 +365,4 @@ async def _translate_event(ev: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
         }
         return
 
-    # Unknown / unhandled — log and skip
     log.debug("unhandled claude event: type=%s subtype=%s", et, sub)
-
-
-def final_text() -> str:
-    """Helper used by _translate_event to dedupe result vs streamed text."""
-    return ""

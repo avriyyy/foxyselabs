@@ -2,17 +2,37 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Logo from "@/components/Logo";
 import { IconPlus } from "@/components/Icons";
+import { FileExplorerPanel } from "./FileExplorerPanel";
 import { PUBLIC_GATEWAY_URL } from "@/lib/api";
 import type { Thread, User } from "@/lib/types";
 
-export function ChatShell({ user, children }: { user: User; children: React.ReactNode }) {
+export function ChatShell({
+  user,
+  initialWorkspacePath,
+  initialThreadId,
+  filesOpen,
+  onFilesOpenChange,
+  children,
+}: {
+  user: User;
+  initialWorkspacePath?: string;
+  initialThreadId?: string;
+  filesOpen: boolean;
+  onFilesOpenChange: (v: boolean) => void;
+  children: React.ReactNode;
+}) {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(true);
+  const [currentWorkspace, setCurrentWorkspace] = useState<string | undefined>(
+    initialWorkspacePath
+  );
+  const [currentThreadId, setCurrentThreadId] = useState<string | undefined>(
+    initialThreadId
+  );
   const pathname = usePathname();
-  const router = useRouter();
 
   async function loadThreads() {
     try {
@@ -36,6 +56,27 @@ export function ChatShell({ user, children }: { user: User; children: React.Reac
     window.addEventListener("foxy:threads-changed", handler);
     return () => window.removeEventListener("foxy:threads-changed", handler);
   }, []);
+
+  // Update current workspace + thread when route changes
+  useEffect(() => {
+    // Extract threadId from path
+    const match = pathname.match(/^\/chat\/([^/]+)$/);
+    if (match && match[1] !== "new") {
+      setCurrentThreadId(match[1]);
+      // load workspace from thread detail
+      fetch(`${PUBLIC_GATEWAY_URL}/api/threads/${match[1]}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.thread?.workspace_path) {
+            setCurrentWorkspace(data.thread.workspace_path);
+          }
+        })
+        .catch(() => {});
+    } else {
+      setCurrentThreadId(undefined);
+      setCurrentWorkspace(initialWorkspacePath);
+    }
+  }, [pathname, initialWorkspacePath]);
 
   return (
     <div className="h-screen w-screen flex bg-background text-on-surface overflow-hidden">
@@ -94,12 +135,12 @@ export function ChatShell({ user, children }: { user: User; children: React.Reac
               <p className="px-3 pt-5 pb-2 text-[0.55rem] font-label-mono uppercase tracking-widest text-text-subtle">
                 Admin
               </p>
-              <button
-                onClick={() => router.push("/admin")}
-                className="w-full text-left px-3 py-2 text-[0.8rem] text-on-surface-variant hover:bg-white/5 hover:text-on-surface border-l-2 border-transparent transition-colors"
+              <Link
+                href="/admin"
+                className="w-full block text-left px-3 py-2 text-[0.8rem] text-on-surface-variant hover:bg-white/5 hover:text-on-surface border-l-2 border-transparent transition-colors"
               >
                 Users & workspaces
-              </button>
+              </Link>
             </>
           )}
         </nav>
@@ -117,7 +158,18 @@ export function ChatShell({ user, children }: { user: User; children: React.Reac
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0">{children}</main>
+      <main className="flex-1 flex flex-col min-w-0 relative">
+        {children}
+        {filesOpen && currentThreadId && (
+          <div className="absolute top-14 right-0 bottom-0 z-20 shadow-2xl">
+            <FileExplorerPanel
+              threadId={currentThreadId}
+              workspacePath={currentWorkspace || ""}
+              onClose={() => onFilesOpenChange(false)}
+            />
+          </div>
+        )}
+      </main>
     </div>
   );
 }

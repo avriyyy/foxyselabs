@@ -18,6 +18,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+var _ = context.Background
+var _ = errors.New
+var _ = pgx.ErrNoRows
+
 type ChatHandler struct {
 	DB              *pgxpool.Pool
 	AgentServiceURL string
@@ -310,7 +314,46 @@ func nullableString(s string) any {
 	return s
 }
 
-// Avoid unused-import warnings when trimming.
-var _ = context.Background
-var _ = errors.New
-var _ = pgx.ErrNoRows
+// Sandbox file proxy: forwards to the agent. The agent's sandbox
+// manager is the only thing that knows about live containers.
+func (h *ChatHandler) ListFiles(c *gin.Context) {
+	threadID := c.Param("id")
+	// Pass-through query (path)
+	q := c.Request.URL.RawQuery
+	target := h.AgentServiceURL + "/v1/sandboxes/" + threadID + "/files"
+	if q != "" {
+		target += "?" + q
+	}
+	h.proxyAgent(c, target)
+}
+
+func (h *ChatHandler) ReadFile(c *gin.Context) {
+	threadID := c.Param("id")
+	q := c.Request.URL.RawQuery
+	target := h.AgentServiceURL + "/v1/sandboxes/" + threadID + "/files/content"
+	if q != "" {
+		target += "?" + q
+	}
+	h.proxyAgent(c, target)
+}
+
+func (h *ChatHandler) proxyAgent(c *gin.Context, target string) {
+	req, err := http.NewRequestWithContext(c, "GET", target, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "build request: " + err.Error()})
+		return
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "agent unreachable: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	for k, v := range resp.Header {
+		for _, vv := range v {
+			c.Writer.Header().Add(k, vv)
+		}
+	}
+	c.Writer.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(c.Writer, resp.Body)
+}

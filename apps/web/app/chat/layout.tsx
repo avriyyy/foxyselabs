@@ -6,14 +6,13 @@ import type { User } from "@/lib/types";
 export const metadata = { title: "Chat — FoxyseLabs" };
 
 export default async function ChatLayout({ children }: { children: React.ReactNode }) {
-  // Bootstrap user (single-owner mode). If not yet initialized, send to /setup.
   let user: User | null = null;
   try {
     const res = await fetch(`${INTERNAL_GATEWAY_URL}/api/admin/me`, { cache: "no-store" });
     if (res.status === 404) redirect("/setup");
     if (res.ok) user = (await res.json()) as User;
   } catch {
-    // network error — let the page render and show error
+    // network
   }
   if (!user) {
     return (
@@ -25,5 +24,17 @@ export default async function ChatLayout({ children }: { children: React.ReactNo
       </div>
     );
   }
-  return <ChatShell user={user}>{children}</ChatShell>;
+  // The Files panel state lives here (server-rendered) but the toggle
+  // is handled by ChatView (client). We pass an initial closed state.
+  return (
+    <ChatShellWrapper user={user}>
+      {children}
+    </ChatShellWrapper>
+  );
+}
+
+// Client wrapper because ChatShell needs useState for the files panel toggle.
+import { ChatShellClient } from "@/components/chat/ChatShellClient";
+function ChatShellWrapper({ user, children }: { user: User; children: React.ReactNode }) {
+  return <ChatShellClient user={user}>{children}</ChatShellClient>;
 }

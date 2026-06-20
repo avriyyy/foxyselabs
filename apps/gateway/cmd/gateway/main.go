@@ -84,12 +84,22 @@ func main() {
 
 	chatH := &handlers.ChatHandler{DB: database.Pool, AgentServiceURL: cfg.AgentServiceURL}
 	api.POST("/chat/stream", chatH.Stream)
+	api.GET("/sandboxes/:id/files", chatH.ListFiles)
+	api.GET("/sandboxes/:id/files/content", chatH.ReadFile)
 
 	// Admin user management (callable by anyone in single-owner mode;
 	// the only user IS admin, so there's no privilege check needed yet)
 	api.GET("/admin/users", adminH.ListUsers)
 	api.POST("/admin/users", adminH.CreateUser)
 	api.POST("/admin/grant", adminH.GrantWorkspace)
+
+	// Workspaces (Sprint 3)
+	workspacesH := &handlers.WorkspacesHandler{DB: database.Pool}
+	api.GET("/workspaces", workspacesH.List)
+	api.POST("/workspaces", workspacesH.Create)
+	api.POST("/workspaces/grant", workspacesH.GrantAccess)
+	api.DELETE("/workspaces/access", workspacesH.RevokeAccess)
+	api.GET("/workspaces/access", workspacesH.ListAccess)
 
 	// Run
 	srv := &http.Server{

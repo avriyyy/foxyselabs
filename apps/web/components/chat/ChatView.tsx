@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PUBLIC_GATEWAY_URL } from "@/lib/api";
+import { EmptyState } from "./EmptyState";
+import { MessageList } from "./MessageList";
+import { InputBar } from "./InputBar";
+import { ActivityPanel } from "./ActivityPanel";
 import type {
   AgentEvent,
   ChatEvent,
@@ -10,12 +15,6 @@ import type {
   Message,
   UiMessage,
 } from "@/lib/types";
-import { EmptyState } from "./EmptyState";
-import { MessageList } from "./MessageList";
-import { InputBar } from "./InputBar";
-import { ActivityPanel } from "./ActivityPanel";
-
-type SetState<T> = React.Dispatch<React.SetStateAction<T>>;
 
 export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string> }) {
   const [messages, setMessages] = useState<UiMessage[]>([]);
@@ -31,6 +30,9 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
     running: false,
   });
   const [activityOpen, setActivityOpen] = useState(false);
+  const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
+  const [workspaces, setWorkspaces] = useState<{ path: string; name: string }[]>([]);
+  const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -44,6 +46,24 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
       if (id && id !== "new") setThreadId(id);
     });
   }, [threadIdFromUrl]);
+
+  // Load workspaces for new chat picker
+  useEffect(() => {
+    if (threadId) {
+      setShowWorkspacePicker(false);
+      return;
+    }
+    let cancelled = false;
+    fetch(`${PUBLIC_GATEWAY_URL}/api/workspaces`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((data) => {
+        if (!cancelled) setWorkspaces(data.data || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [threadId]);
 
   // Load thread messages on threadId change
   useEffect(() => {
@@ -79,7 +99,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
     };
   }, [threadId]);
 
-  // Auto-scroll: only if user is already near the bottom
   useEffect(() => {
     if (!scrollRef.current) return;
     const el = scrollRef.current;
@@ -89,19 +108,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
     }
   }, [messages, streaming]);
 
-  function appendPart(asstId: string, part: ChatPart) {
-    setMessages((curr) =>
-      curr.map((m) =>
-        m.id === asstId
-          ? {
-              ...m,
-              parts: [...m.parts, part],
-            }
-          : m
-      )
-    );
-  }
-
   function appendText(asstId: string, text: string) {
     if (!text) return;
     setMessages((curr) =>
@@ -109,7 +115,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
         if (m.id !== asstId) return m;
         const parts = [...m.parts];
         const last = parts[parts.length - 1];
-        // coalesce adjacent text deltas
         if (last && last.kind === "text") {
           parts[parts.length - 1] = { kind: "text", content: last.content + text };
         } else {
@@ -168,8 +173,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
       curr.map((m) => {
         if (m.id !== asstId) return m;
         const parts = [...m.parts];
-        // For text_delta / thinking_delta, use specialized appenders that
-        // coalesce with the previous one.
         if (event.kind === "text_delta") {
           appendText(asstId, event.delta);
           return m;
@@ -178,8 +181,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
           appendThinking(asstId, event.content);
           return m;
         }
-        // For tool_end, try to merge with matching tool_start; otherwise
-        // append a new event.
         if (event.kind === "tool_end") {
           const idx = m.parts.findIndex(
             (p) =>
@@ -188,14 +189,13 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
               p.event.id === event.id
           );
           if (idx >= 0) {
-            parts[idx] = { kind: "event", event };
+            parts[idx] = { kind: "event" as const, event };
             return { ...m, parts };
           }
-          parts.push({ kind: "event", event });
+          parts.push({ kind: "event" as const, event });
           return { ...m, parts };
         }
-        // Other events: append. The renderer will group.
-        parts.push({ kind: "event", event });
+        parts.push({ kind: "event" as const, event });
         return { ...m, parts };
       })
     );
@@ -234,12 +234,10 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
         break;
 
       case "thinking.start":
-        // start a fresh thinking block (close any prior open block)
         updateLastEvent(
           asstId,
           (e) => e.kind === "thinking_delta",
-          (e) =>
-            e.kind === "thinking_delta" ? { ...e, complete: true } : e
+          (e) => (e.kind === "thinking_delta" ? { ...e, complete: true } : e)
         );
         setLastEvent(asstId, { kind: "thinking_delta", content: "" });
         break;
@@ -252,8 +250,7 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
         updateLastEvent(
           asstId,
           (e) => e.kind === "thinking_delta",
-          (e) =>
-            e.kind === "thinking_delta" ? { ...e, complete: true } : e
+          (e) => (e.kind === "thinking_delta" ? { ...e, complete: true } : e)
         );
         break;
 
@@ -268,9 +265,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
         break;
 
       case "tool.progress":
-        // for Bash: append to the matching shell buffer; we model this
-        // as a tool_start with growing input is not ideal, so instead we
-        // store as a special event the renderer will merge.
         setMessages((curr) =>
           curr.map((m) => {
             if (m.id !== asstId) return m;
@@ -307,12 +301,7 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
         break;
 
       case "file.read":
-        // informational; renderer ignores (file read tool is rendered
-        // via the matching tool_start/tool_end pair).
-        break;
-
       case "file.edit":
-        // informational; same.
         break;
 
       case "shell.start":
@@ -325,10 +314,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
         break;
 
       case "shell.output":
-        // The agent emits shell_start + shell.output + shell.end. The
-        // ChatView setLastEvent handler maps shell.start to a tool_start
-        // (name=Bash) above. shell.output updates the tool_start's
-        // __shellBuffer so the final tool_end will carry the output.
         setMessages((curr) =>
           curr.map((m) => {
             if (m.id !== asstId) return m;
@@ -355,7 +340,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
         break;
 
       case "shell.end":
-        // convert to a tool_end so the renderer shows it as a shell card
         setMessages((curr) =>
           curr.map((m) => {
             if (m.id !== asstId) return m;
@@ -421,9 +405,7 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
 
       case "thread.end":
         setMessages((curr) =>
-          curr.map((m) =>
-            m.id === asstId ? { ...m, pending: false } : m
-          )
+          curr.map((m) => (m.id === asstId ? { ...m, pending: false } : m))
         );
         setLiveSession((s) => ({ ...s, running: false }));
         break;
@@ -454,12 +436,7 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
     const asstId = `tmp-a-${Date.now()}`;
     setMessages((m) => [
       ...m,
-      {
-        id: asstId,
-        role: "assistant",
-        parts: [],
-        pending: true,
-      },
+      { id: asstId, role: "assistant", parts: [], pending: true },
     ]);
     setStreaming(true);
 
@@ -473,6 +450,7 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
         body: JSON.stringify({
           thread_id: threadId || undefined,
           content: text.trim(),
+          workspace: selectedWorkspace || undefined,
         }),
         signal: ctrl.signal,
       });
@@ -517,7 +495,7 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
               }
             });
           } catch {
-            // ignore malformed
+            // ignore
           }
         }
       }
@@ -540,40 +518,82 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
     abortRef.current?.abort();
   }
 
+  const isNewChat = !threadId;
+  const showPicker = isNewChat && (showWorkspacePicker || workspaces.length > 0);
+
   return (
     <section className="flex-1 flex flex-col min-w-0">
-      {/* Header */}
       <div className="h-14 px-5 border-b border-white/5 flex items-center gap-3">
         <span className="w-1.5 h-1.5 rounded-full bg-pink-neon animate-pulse" />
         <p className="font-label-mono text-[0.6rem] uppercase tracking-widest text-pink-neon">
           {threadId ? "Thread" : "New chat"}
         </p>
         {streaming && (
-          <span className="ml-auto font-label-mono text-[0.55rem] uppercase tracking-widest text-text-subtle">
+          <span className="font-label-mono text-[0.55rem] uppercase tracking-widest text-text-subtle">
             streaming
           </span>
         )}
-        <button
-          onClick={() => setActivityOpen((v) => !v)}
-          className={`ml-auto px-2.5 py-1 text-[0.6rem] font-label-mono uppercase tracking-widest border transition-colors ${
-            activityOpen
-              ? "border-pink-neon/50 text-pink-neon"
-              : "border-white/10 text-text-subtle hover:text-on-surface hover:border-white/20"
-          }`}
-          title="Toggle activity panel"
-        >
-          Activity
-        </button>
+        {isNewChat && selectedWorkspace && (
+          <span className="font-label-mono text-[0.6rem] text-text-subtle ml-1">
+            · {selectedWorkspace}
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-1.5">
+          {isNewChat && (
+            <button
+              onClick={() => setShowWorkspacePicker((v) => !v)}
+              className={`px-2.5 py-1 text-[0.6rem] font-label-mono uppercase tracking-widest border transition-colors ${
+                showWorkspacePicker
+                  ? "border-pink-neon/50 text-pink-neon"
+                  : "border-white/10 text-text-subtle hover:text-on-surface hover:border-white/20"
+              }`}
+            >
+              Workspace
+            </button>
+          )}
+          <button
+            onClick={() => {
+              const evt = new CustomEvent("foxy:toggle-files");
+              window.dispatchEvent(evt);
+            }}
+            className="px-2.5 py-1 text-[0.6rem] font-label-mono uppercase tracking-widest border border-white/10 text-text-subtle hover:text-on-surface hover:border-white/20 transition-colors disabled:opacity-30"
+            title="Toggle files panel"
+            disabled={!threadId}
+          >
+            Files
+          </button>
+          <button
+            onClick={() => setActivityOpen((v) => !v)}
+            className={`px-2.5 py-1 text-[0.6rem] font-label-mono uppercase tracking-widest border transition-colors ${
+              activityOpen
+                ? "border-pink-neon/50 text-pink-neon"
+                : "border-white/10 text-text-subtle hover:text-on-surface hover:border-white/20"
+            }`}
+            title="Toggle activity panel"
+          >
+            Activity
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 flex min-h-0">
-        {/* Body */}
         <div
           ref={scrollRef}
           className="flex-1 overflow-y-auto px-4 md:px-16 py-6 scrollbar-thin"
         >
           <div className="max-w-3xl mx-auto">
-            {messages.length === 0 ? (
+            {showPicker && (
+              <WorkspacePicker
+                workspaces={workspaces}
+                selected={selectedWorkspace}
+                onSelect={(path) => {
+                  setSelectedWorkspace(path);
+                  setShowWorkspacePicker(false);
+                }}
+                visible={showWorkspacePicker}
+              />
+            )}
+            {messages.length === 0 && !showPicker ? (
               <EmptyState onPromptClick={(p) => sendMessage(p)} disabled={streaming} />
             ) : (
               <MessageList messages={messages} />
@@ -586,7 +606,6 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
           </div>
         </div>
 
-        {/* Activity panel */}
         {activityOpen && (
           <ActivityPanel session={liveSession} onClose={() => setActivityOpen(false)} />
         )}
@@ -598,5 +617,41 @@ export function ChatView({ threadIdFromUrl }: { threadIdFromUrl?: Promise<string
         </div>
       </div>
     </section>
+  );
+}
+
+function WorkspacePicker({
+  workspaces,
+  selected,
+  onSelect,
+  visible,
+}: {
+  workspaces: { path: string; name: string }[];
+  selected: string | null;
+  onSelect: (path: string) => void;
+  visible: boolean;
+}) {
+  if (workspaces.length === 0) return null;
+  return (
+    <div className="mb-4 stitch-node-glass p-4">
+      <p className="font-label-mono text-[0.6rem] uppercase tracking-widest text-text-subtle mb-3">
+        Pick a workspace
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {workspaces.map((w) => (
+          <button
+            key={w.path}
+            onClick={() => onSelect(w.path)}
+            className={`px-3 py-1.5 text-[0.78rem] font-mono border transition-colors ${
+              selected === w.path
+                ? "border-pink-neon text-pink-neon bg-pink-neon/10"
+                : "border-white/10 text-on-surface-variant hover:border-white/20"
+            }`}
+          >
+            {w.path}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
