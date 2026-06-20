@@ -80,6 +80,8 @@ services:
       FOX_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       FOX_ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       FOX_OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      FOX_MIMO_API_KEY: ${MIMO_API_KEY:-}
+      FOX_MIMO_BASE_URL: ${MIMO_BASE_URL:-https://api.xiaomimimo.com/v1}
       FOX_DEFAULT_PROVIDER: ${DEFAULT_PROVIDER:-openai}
       FOX_DEFAULT_MODEL: ${DEFAULT_MODEL:-gpt-4o-mini}
     networks:

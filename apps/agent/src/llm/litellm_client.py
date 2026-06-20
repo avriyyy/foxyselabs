@@ -18,7 +18,15 @@ litellm.set_verbosity = "warning"
 litellm.drop_params = True
 
 
-SUPPORTED_PROVIDERS = ("openai", "anthropic", "ollama")
+SUPPORTED_PROVIDERS = ("openai", "anthropic", "ollama", "mimo")
+
+# Default models per provider (used when the user hasn't picked one)
+PROVIDER_DEFAULT_MODELS: dict[str, str] = {
+    "openai": "gpt-4o-mini",
+    "anthropic": "claude-3-5-haiku-latest",
+    "ollama": "llama3.2",
+    "mimo": "mimo-v2-flash",
+}
 
 
 def _resolve_api_key(provider: str) -> str | None:
@@ -28,6 +36,16 @@ def _resolve_api_key(provider: str) -> str | None:
         return settings.anthropic_api_key
     if provider == "ollama":
         return None  # ollama uses base_url, no key
+    if provider == "mimo":
+        return settings.mimo_api_key
+    return None
+
+
+def _resolve_api_base(provider: str) -> str | None:
+    if provider == "ollama":
+        return settings.ollama_base_url or None
+    if provider == "mimo":
+        return settings.mimo_base_url
     return None
 
 
@@ -39,8 +57,13 @@ def _build_kwargs(
     **extra: Any,
 ) -> dict[str, Any]:
     """Translate provider+model into LiteLLM kwargs."""
-    # Normalize model id (LiteLLM expects "openai/gpt-4o-mini" or "gpt-4o-mini")
-    full_model = model if "/" in model else f"{provider}/{model}"
+    # MiMo is OpenAI-compatible, so route it through the openai/ prefix
+    # with a custom api_base. This is the standard LiteLLM pattern for
+    # any OpenAI-compatible endpoint.
+    if provider == "mimo":
+        full_model = f"openai/{model}"
+    else:
+        full_model = model if "/" in model else f"{provider}/{model}"
 
     msgs: list[dict[str, str]] = []
     if system_prompt:
@@ -56,8 +79,10 @@ def _build_kwargs(
     api_key = _resolve_api_key(provider)
     if api_key:
         kwargs["api_key"] = api_key
-    if provider == "ollama" and settings.ollama_base_url:
-        kwargs["api_base"] = settings.ollama_base_url
+
+    api_base = _resolve_api_base(provider)
+    if api_base:
+        kwargs["api_base"] = api_base
 
     kwargs.update(extra)
     return kwargs
@@ -82,8 +107,12 @@ async def stream_chat(
         yield {"type": "error", "code": "invalid_provider", "message": f"unsupported provider: {provider}"}
         return
 
+    if not model:
+        model = PROVIDER_DEFAULT_MODELS.get(provider, "")
+
     kwargs = _build_kwargs(provider, model, messages, system_prompt, **extra)
-    log.info("calling %s model=%s", provider, model)
+    log.info("calling provider=%s model=%s api_base=%s",
+             provider, kwargs.get("model"), kwargs.get("api_base", "<default>"))
 
     try:
         response = await litellm.acompletion(**kwargs)

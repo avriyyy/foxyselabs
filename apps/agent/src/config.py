@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     ollama_base_url: str | None = None
 
+    # Xiaomi MiMo (OpenAI-compatible)
+    mimo_api_key: str | None = None
+    mimo_base_url: str = "https://api.xiaomimimo.com/v1"
+
     default_provider: str = "openai"
     default_model: str = "gpt-4o-mini"
 
