@@ -39,18 +39,69 @@ services:
     networks:
       - foxynet
 
-  # Placeholders for Sprint 1+ (uncomment as services are built)
-  # gateway:
-  #   build: ./apps/gateway
-  #   ...
+  gateway:
+    build:
+      context: ./apps/gateway
+      dockerfile: Dockerfile
+    container_name: foxyselabs-gateway
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      agent:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-foxyse}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-foxyse}
+      REDIS_URL: redis://redis:6379/0
+      GATEWAY_PORT: 8080
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      AGENT_SERVICE_URL: http://agent:8000
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      ACCESS_TOKEN_TTL: 24
+      REFRESH_TOKEN_TTL: 30
+      GIN_MODE: release
+    networks:
+      - foxynet
+    expose:
+      - "8080"
 
-  # agent:
-  #   build: ./apps/agent
-  #   ...
+  agent:
+    build:
+      context: ./apps/agent
+      dockerfile: Dockerfile
+    container_name: foxyselabs-agent
+    restart: unless-stopped
+    environment:
+      FOX_AGENT_PORT: 8000
+      FOX_LOG_LEVEL: info
+      FOX_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      FOX_ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      FOX_OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      FOX_DEFAULT_PROVIDER: ${DEFAULT_PROVIDER:-openai}
+      FOX_DEFAULT_MODEL: ${DEFAULT_MODEL:-gpt-4o-mini}
+    networks:
+      - foxynet
+    expose:
+      - "8000"
 
-  # web:
-  #   build: ./apps/web
-  #   ...
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: foxyselabs-web
+    restart: unless-stopped
+    depends_on:
+      - gateway
+    environment:
+      NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-http://localhost:8080}
+      NODE_ENV: production
+    ports:
+      - "${PUBLIC_PORT:-3000}:3000"
+    networks:
+      - foxynet
 
 networks:
   foxynet:
