@@ -1,44 +1,44 @@
 import { useEffect, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { ConnectButton } from "@rainbow-me/rainbowkit"
 import { useAccount, useDisconnect } from "wagmi"
 import { useConnectModal } from "@rainbow-me/rainbowkit"
+import { useAuth } from "../contexts/AuthContext"
 import Logo from "./Logo"
 
 const PLANS = [
   {
     name: "Free", price: "$0", period: "forever",
     features: [
-      { text: "Scanner (raw prices only)", included: true },
-      { text: "Profit analysis", included: false },
-      { text: "Alerts (3 lifetime)", included: true },
-      { text: "Auto-Execute", included: false },
-      { text: "Historical data (7 days)", included: true },
+      { text: "1 AI Agent", included: true },
+      { text: "1,000 messages/month", included: true },
+      { text: "Basic analytics", included: true },
+      { text: "Custom integrations", included: false },
+      { text: "Priority support", included: false },
     ],
     cta: "Get Started", highlighted: false,
   },
   {
     name: "Pro", price: "$19", period: "per month",
     features: [
-      { text: "Scanner with full analysis", included: true },
-      { text: "Profit analysis", included: true },
-      { text: "Unlimited alerts", included: true },
-      { text: "Auto-Execute ON/OFF", included: true },
-      { text: "Historical data (30 days)", included: true },
+      { text: "5 AI Agents", included: true },
+      { text: "50,000 messages/month", included: true },
+      { text: "Advanced analytics", included: true },
+      { text: "Custom integrations", included: true },
+      { text: "Email support", included: true },
     ],
     cta: "Subscribe Pro", highlighted: true,
   },
   {
     name: "Elite", price: "$49", period: "per month",
     features: [
-      { text: "Scanner with full analysis", included: true },
-      { text: "Profit analysis", included: true },
-      { text: "Unlimited alerts", included: true },
-      { text: "Auto-Execute (Highest Priority)", included: true },
-      { text: "Multi-Wallet support", included: true },
+      { text: "Unlimited AI Agents", included: true },
+      { text: "Unlimited messages", included: true },
+      { text: "Real-time analytics", included: true },
+      { text: "Custom integrations + SDK", included: true },
       { text: "API Access", included: true },
-      { text: "Historical data (90 days)", included: true },
-      { text: "Priority Support", included: true },
+      { text: "Multi-team support", included: true },
+      { text: "Priority Support 24/7", included: true },
     ],
     cta: "Subscribe Elite", highlighted: false,
   },
@@ -157,6 +157,8 @@ export default function NavBar() {
   const [showPricing, setShowPricing] = useState(false)
   const [role, setRole] = useState("Free")
   const { address: walletAddress } = useAccount()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (!walletAddress) return
@@ -165,6 +167,11 @@ export default function NavBar() {
       .then((data) => setRole(data.role))
       .catch(() => {})
   }, [walletAddress])
+
+  const handleLogout = () => {
+    logout()
+    setMobileOpen(false)
+  }
 
   return (
     <>
@@ -179,13 +186,22 @@ export default function NavBar() {
           </Link>
           <button
             onClick={() => setShowPricing(true)}
-            className="border border-pink-neon text-pink-neon bg-transparent hover:bg-pink-neon/10 px-2.5 py-0.5 rounded-DEFAULT font-label-mono tracking-wider text-[9px] font-semibold transition-all duration-300"
+            className="border border-pink-neon/50 text-pink-neon bg-transparent hover:bg-pink-neon/10 px-2.5 py-0.5 rounded-DEFAULT font-label-mono tracking-wider text-[9px] font-semibold transition-all duration-300 hidden sm:inline-block"
           >
             {role}
           </button>
         </div>
 
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-3">
+          {user && (
+            <Link to="/chat" className="text-on-surface-variant hover:text-pink-neon transition-colors font-label-mono uppercase tracking-wider text-[0.65rem] flex items-center gap-1.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              Chat
+            </Link>
+          )}
+
           <ConnectButton.Custom>
             {({ account, openConnectModal, mounted }) => {
               if (!mounted) return <div className="w-24 h-8" />
@@ -202,6 +218,19 @@ export default function NavBar() {
               )
             }}
           </ConnectButton.Custom>
+
+          {user ? (
+            <button
+              onClick={handleLogout}
+              className="text-text-subtle hover:text-error transition-colors font-label-mono uppercase tracking-wider text-[0.6rem]"
+            >
+              Sign Out
+            </button>
+          ) : (
+            <Link to="/auth" className="btn-cyber-pink px-3.5 py-1.5 rounded-DEFAULT font-label-mono uppercase tracking-wider text-[0.6rem]">
+              Sign In
+            </Link>
+          )}
         </div>
 
         <button
@@ -227,11 +256,28 @@ export default function NavBar() {
       {mobileOpen && (
         <div className="md:hidden border-t border-white/5 bg-surface/95 backdrop-blur-xl">
           <div className="flex flex-col gap-1 px-margin-mobile py-4">
+            {user && (
+              <>
+                <Link
+                  to="/chat"
+                  onClick={() => setMobileOpen(false)}
+                  className="w-full text-left px-4 py-3 text-pink-neon hover:bg-white/5 transition-colors font-label-mono uppercase tracking-wider text-[11px] flex items-center gap-2"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                  Chat
+                </Link>
+                <div className="px-4 py-2 font-body-sm text-body-sm text-on-surface">
+                  {user.name || user.email}
+                </div>
+              </>
+            )}
             <button
               onClick={() => { setShowPricing(true); setMobileOpen(false) }}
-              className="w-full text-left px-4 py-3 text-pink-neon hover:bg-white/5 transition-colors font-label-mono uppercase tracking-wider text-[11px]"
+              className="w-full text-left px-4 py-3 text-on-surface-variant hover:text-pink-neon hover:bg-white/5 transition-colors font-label-mono uppercase tracking-wider text-[11px]"
             >
-              Role: {role}
+              Pricing
             </button>
             <ConnectButton.Custom>
               {({ account, openConnectModal, mounted }) => {
@@ -243,7 +289,7 @@ export default function NavBar() {
                         {account.address}
                       </div>
                       <button onClick={() => { account.connector?.disconnect(); setMobileOpen(false) }} className="w-full text-left px-4 py-3 text-on-surface-variant hover:text-pink-neon hover:bg-white/5 transition-colors">
-                        Disconnect
+                        Disconnect Wallet
                       </button>
                     </>
                   )
@@ -257,6 +303,19 @@ export default function NavBar() {
                 )
               }}
             </ConnectButton.Custom>
+            {user ? (
+              <button onClick={handleLogout} className="w-full text-left px-4 py-3 text-error hover:bg-white/5 transition-colors font-label-mono uppercase tracking-wider text-[11px]">
+                Sign Out
+              </button>
+            ) : (
+              <Link
+                to="/auth"
+                onClick={() => setMobileOpen(false)}
+                className="btn-cyber-pink text-center py-2.5 rounded-DEFAULT font-label-mono uppercase tracking-wider text-[11px] mx-4"
+              >
+                Sign In / Register
+              </Link>
+            )}
           </div>
         </div>
       )}
