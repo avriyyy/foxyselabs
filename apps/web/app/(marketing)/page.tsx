@@ -7,6 +7,7 @@ import {
   IconLock,
   IconLogo,
   IconScale,
+  IconTerminal,
   IconWorkflow,
 } from "@/components/Icons";
 import { PricingSection } from "@/components/marketing/PricingSection";
