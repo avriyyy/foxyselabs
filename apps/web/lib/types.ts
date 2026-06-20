@@ -33,8 +33,83 @@ export interface ThreadDetail {
   messages: Message[];
 }
 
-// Agent / Claude Code SSE event types
-// (mirrors apps/agent/src/claudecode.py)
+// ============================================================================
+// Activity events from the agent (mirrors apps/agent/src/claudecode.py)
+// ============================================================================
+
+export type ToolStatus = "running" | "success" | "error";
+
+export type ChatEvent =
+  // Initial info from system.init
+  | { kind: "init"; model: string; tools: string[]; mcpServers: string[]; sessionId?: string }
+  // Streaming assistant text delta
+  | { kind: "text_delta"; delta: string }
+  // Extended thinking content (MiMo / Claude)
+  | { kind: "thinking_delta"; content: string; complete?: boolean }
+  // Generic tool call
+  | {
+      kind: "tool_start";
+      id: string;
+      name: string;
+      server?: string; // 'builtin' | 'mcp:<name>'
+      input: unknown;
+    }
+  | {
+      kind: "tool_end";
+      id: string;
+      output: unknown;
+      status: ToolStatus;
+      durationMs?: number;
+    }
+  // File operations (decoded from Read/Write/Edit tool args)
+  | { kind: "file_read"; path: string; lines?: number }
+  | { kind: "file_edit"; path: string; action: "create" | "update" | "delete"; diff?: string }
+  // Shell command
+  | { kind: "shell_start"; id: string; command: string; description?: string }
+  | { kind: "shell_output"; id: string; stream: "stdout" | "stderr"; chunk: string }
+  | { kind: "shell_end"; id: string; exitCode?: number; durationMs?: number }
+  // Ask user (human-in-the-loop, future)
+  | { kind: "ask_user"; id: string; question: string; options?: string[] }
+  // Errors
+  | { kind: "error"; code: string; message: string; recoverable?: boolean };
+
+// A "part" is the ordered unit rendered in the message list.
+// Either a text segment (accumulated text) or a rendered event card.
+export type ChatPart =
+  | { kind: "text"; content: string }
+  | { kind: "event"; event: ChatEvent };
+
+// UI-side message representation. parts[] is the chronological list of
+// what was streamed. text content from the assistant is also collapsed
+// into a single text part for compactness.
+export type UiMessage = {
+  id: string;
+  role: "user" | "assistant";
+  parts: ChatPart[];
+  model?: string;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  createdAt?: string;
+  pending?: boolean;
+};
+
+// Live session metadata for the activity panel
+export type LiveSession = {
+  threadId: string | null;
+  model?: string;
+  tools: string[];
+  mcpServers: string[];
+  startedAt?: number;
+  // rolling counters updated as events arrive
+  promptTokens: number;
+  completionTokens: number;
+  // last error
+  lastError?: { code: string; message: string };
+  // True while a stream is in flight
+  running: boolean;
+};
+
+// The raw SSE event type from /api/chat/stream
 export type AgentEvent =
   | { type: "init"; model: string; tools: string[]; session_id?: string; mcp_servers?: string[] }
   | { type: "thread.start"; thread_id: string }

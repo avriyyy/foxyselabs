@@ -241,3 +241,131 @@ export function IconStop({ className, size = 14 }: Props) {
     </svg>
   );
 }
+
+export function IconClose({ className, size = 14 }: Props) {
+  return (
+    <svg {...baseProps(size, className)}>
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+export function IconRead({ className, size = 16 }: Props) {
+  return (
+    <svg {...baseProps(size, className)}>
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+    </svg>
+  );
+}
+
+export function IconWrite({ className, size = 16 }: Props) {
+  return (
+    <svg {...baseProps(size, className)}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z" />
+    </svg>
+  );
+}
+
+export function IconEdit({ className, size = 16 }: Props) {
+  return (
+    <svg {...baseProps(size, className)}>
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
+    </svg>
+  );
+}
+
+export function IconGlobe({ className, size = 16 }: Props) {
+  return (
+    <svg {...baseProps(size, className)}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
+
+export function IconHammer({ className, size = 16 }: Props) {
+  return (
+    <svg {...baseProps(size, className)}>
+      <path d="M14 5l3 3" />
+      <path d="M13 7l-9 9 4 4 9-9" />
+      <path d="M5 19l-2 2" />
+      <path d="M14 14l3 3" />
+    </svg>
+  );
+}
+
+export function IconList({ className, size = 16 }: Props) {
+  return (
+    <svg {...baseProps(size, className)}>
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" />
+      <line x1="3" y1="12" x2="3.01" y2="12" />
+      <line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+  );
+}
+
+export function IconLayers({ className, size = 16 }: Props) {
+  return (
+    <svg {...baseProps(size, className)}>
+      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
+    </svg>
+  );
+}
+
+export function IconChevronDown({ className, size = 14 }: Props) {
+  return (
+    <svg {...baseProps(size, className)}>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+export function IconChevronUp({ className, size = 14 }: Props) {
+  return (
+    <svg {...baseProps(size, className)}>
+      <polyline points="18 15 12 9 6 15" />
+    </svg>
+  );
+}
+
+export function IconAlert({ className, size = 14 }: Props) {
+  return (
+    <svg {...baseProps(size, className)}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  );
+}
+
+export function IconActivity({ className, size = 14 }: Props) {
+  return (
+    <svg {...baseProps(size, className)}>
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  );
+}
+
+export function IconWand({ className, size = 14 }: Props) {
+  return (
+    <svg {...baseProps(size, className)}>
+      <path d="M15 4V2" />
+      <path d="M15 16v-2" />
+      <path d="M8 9h2" />
+      <path d="M20 9h2" />
+      <path d="M17.8 11.8 19 13" />
+      <path d="M11 5l1.2 1.2" />
+      <path d="M5 19l8-8" />
+    </svg>
+  );
+}
