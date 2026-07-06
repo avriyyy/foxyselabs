@@ -1,65 +1,29 @@
-# Dependencies
-node_modules/
-.pnp
+# dependencies
+/node_modules
+/.pnp
 .pnp.js
 
-# Build outputs
-dist/
-build/
-.next/
-out/
-*.tsbuildinfo
+# next.js
+/.next/
+/out/
 
-# Go
-*.exe
-*.test
-*.out
-apps/gateway/bin/
+# production
+/build
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-.venv/
-venv/
-env/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-apps/agent/dist/
-apps/agent/*.egg-info/
-
-# Env
-.env
-.env.local
-.env.*.local
-
-# Data volumes (mounted into containers)
-data/
-!data/.gitkeep
-
-# Legacy code kept locally for reference only
-references/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+# misc
 .DS_Store
-session.txt
+*.pem
 
-# Logs
-logs/
-*.log
+# debug
 npm-debug.log*
-pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Test coverage
-coverage/
-.nyc_output/
+# local env files
+.env
+.env*.local
 
-# OS
-Thumbs.db
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+/app/generated/prisma

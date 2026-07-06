@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --color-surface: #0f0f1a;
+  --color-surface-2: #1a1a2e;
+  --color-surface-3: #262640;
+  --color-text: #f5f5f5;
+  --color-text-muted: #b0b0c0;
+  --color-primary: #db2777;
+  --color-primary-soft: #2d1b2e;
+  --color-primary-deep: #be185d;
+  --color-border: #2a2a40;
+  --color-glass-bg: rgba(15, 15, 26, 0.6);
+  --color-glass-border: rgba(219, 39, 119, 0.15);
+  --radius-card: 1rem;
+  --font-body: "Itim", cursive;
+}

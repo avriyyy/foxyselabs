@@ -1,31 +1,30 @@
 {
-  "name": "foxyselabs",
+  "name": "foxyselabs-landing",
   "version": "0.1.0",
   "private": true,
-  "description": "Self-hosted AI Agent platform (Claude Desktop for the web). MIT licensed.",
-  "license": "MIT",
-  "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=9.0.0"
-  },
-  "packageManager": "pnpm@9.12.0",
   "scripts": {
-    "dev:web": "pnpm --filter @foxyselabs/web dev",
-    "dev:gateway": "pnpm --filter @foxyselabs/gateway dev",
-    "dev:agent": "pnpm --filter @foxyselabs/agent dev",
-    "build:web": "pnpm --filter @foxyselabs/web build",
-    "build:gateway": "pnpm --filter @foxyselabs/gateway build",
-    "build:agent": "pnpm --filter @foxyselabs/agent build",
-    "build": "pnpm -r build",
-    "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
-    "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f",
-    "docker:reset": "docker compose down -v && docker compose up -d",
-    "db:migrate": "docker compose exec -T postgres psql -U foxyse -d foxyse -f /docker-entrypoint-initdb.d/0001_init.sql"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@gsap/react": "^2.1.2",
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^3.0.3",
+    "gsap": "^3.15.0",
+    "lucide-react": "^0.547.0",
+    "next": "16.2.9",
+    "prisma": "^5.22.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.6.3"
+    "@tailwindcss/postcss": "^4.1.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "26.0.1",
+    "@types/react": "19.2.17",
+    "tailwindcss": "^4.1.0",
+    "typescript": "6.0.3"
   }
 }
