@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { LayoutDashboard, Globe, Rocket, LayoutTemplate, Bot, CreditCard, LifeBuoy, Settings, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, Globe, Rocket, LayoutTemplate, Bot, CreditCard, LifeBuoy, Settings, LogOut, Menu, X, Database } from "lucide-react";
 import Logo from "@/components/Logo";
 
 const navItems = [
   { label: "Beranda", icon: LayoutDashboard, href: "/dashboard" },
   { label: "Deployment", icon: Rocket, href: "/dashboard/deployment" },
+  { label: "Database", icon: Database, href: "/dashboard/database" },
   { label: "Domain", icon: Globe, href: "/dashboard/domain" },
   { label: "Templates", icon: LayoutTemplate, href: "/dashboard/templates" },
   { label: "Agents", icon: Bot, href: "/dashboard/agents" },
