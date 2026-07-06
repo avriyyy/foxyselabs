@@ -10,6 +10,9 @@ export default function DatabaseDeploymentPage() {
     name: "",
     type: "postgresql",
     version: "15",
+    isPublic: false,
+    customUser: "",
+    customPassword: ""
   });
   const [deployedData, setDeployedData] = useState(null);
 
@@ -134,6 +137,48 @@ export default function DatabaseDeploymentPage() {
                     </>
                   )}
                 </select>
+              </div>
+
+              <div className="border-t border-black/5 pt-6 mt-6">
+                <h3 className="font-medium text-black mb-4">Pengaturan Lanjutan (Opsional)</h3>
+                
+                <div className="space-y-4">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="w-5 h-5 rounded border-gray-300 text-brand focus:ring-brand"
+                      checked={formData.isPublic}
+                      onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
+                    />
+                    <div>
+                      <span className="block text-sm font-medium text-black">Akses Publik</span>
+                      <span className="block text-xs text-black/50">Izinkan database diakses dari luar jaringan (membutuhkan Public Port)</span>
+                    </div>
+                  </label>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <div>
+                      <label className="block text-xs font-medium text-black/70 mb-1">Custom Username</label>
+                      <input
+                        type="text"
+                        placeholder="Default jika kosong"
+                        className="w-full px-4 py-2 text-sm rounded-xl border border-black/10 focus:outline-none focus:border-brand"
+                        value={formData.customUser}
+                        onChange={(e) => setFormData({ ...formData, customUser: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-black/70 mb-1">Custom Password</label>
+                      <input
+                        type="password"
+                        placeholder="Auto-generate jika kosong"
+                        className="w-full px-4 py-2 text-sm rounded-xl border border-black/10 focus:outline-none focus:border-brand"
+                        value={formData.customPassword}
+                        onChange={(e) => setFormData({ ...formData, customPassword: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="pt-4 border-t border-black/5 flex justify-end">

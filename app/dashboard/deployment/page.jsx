@@ -10,7 +10,24 @@ export default function DeploymentPage() {
     projectName: "",
     repoUrl: "",
     template: "nextjs",
+    domain: "",
+    buildPack: "nixpacks",
+    portsExposes: "3000",
+    envVars: [{ key: "", value: "" }]
   });
+
+  const handleAddEnv = () => setFormData(prev => ({ ...prev, envVars: [...prev.envVars, { key: "", value: "" }] }));
+  
+  const handleEnvChange = (index, field, value) => {
+    const newEnvs = [...formData.envVars];
+    newEnvs[index][field] = value;
+    setFormData(prev => ({ ...prev, envVars: newEnvs }));
+  };
+
+  const handleRemoveEnv = (index) => {
+    const newEnvs = formData.envVars.filter((_, i) => i !== index);
+    setFormData(prev => ({ ...prev, envVars: newEnvs }));
+  };
 
   const handleDeploy = async (e) => {
     e.preventDefault();
@@ -121,6 +138,88 @@ export default function DeploymentPage() {
                       <p className="text-xs text-black/50">Vite JS SPA template</p>
                     </div>
                   </label>
+                </div>
+              </div>
+
+              <div className="border-t border-black/5 pt-6 mt-6">
+                <h3 className="font-medium text-black mb-4">Pengaturan Lanjutan (Opsional)</h3>
+                
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-black mb-2">Custom Domain</label>
+                    <input
+                      type="text"
+                      placeholder="Misal: https://app.domainanda.com"
+                      className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:border-brand"
+                      value={formData.domain}
+                      onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-black mb-2">Build Pack</label>
+                      <select
+                        className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:border-brand bg-white"
+                        value={formData.buildPack}
+                        onChange={(e) => setFormData({ ...formData, buildPack: e.target.value })}
+                      >
+                        <option value="nixpacks">Nixpacks (Otomatis)</option>
+                        <option value="dockerfile">Dockerfile</option>
+                        <option value="dockercompose">Docker Compose</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-black mb-2">Ports Exposes</label>
+                      <input
+                        type="text"
+                        placeholder="Misal: 3000"
+                        className="w-full px-4 py-3 rounded-xl border border-black/10 focus:outline-none focus:border-brand"
+                        value={formData.portsExposes}
+                        onChange={(e) => setFormData({ ...formData, portsExposes: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-black mb-2 flex justify-between items-center">
+                      <span>Environment Variables</span>
+                      <button 
+                        type="button" 
+                        onClick={handleAddEnv}
+                        className="text-xs text-brand font-medium hover:underline"
+                      >
+                        + Tambah Env
+                      </button>
+                    </label>
+                    <div className="space-y-2">
+                      {formData.envVars.map((env, index) => (
+                        <div key={index} className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="KEY"
+                            className="w-1/3 px-3 py-2 text-sm rounded-lg border border-black/10 focus:outline-none focus:border-brand font-mono"
+                            value={env.key}
+                            onChange={(e) => handleEnvChange(index, "key", e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            placeholder="VALUE"
+                            className="flex-1 px-3 py-2 text-sm rounded-lg border border-black/10 focus:outline-none focus:border-brand font-mono"
+                            value={env.value}
+                            onChange={(e) => handleEnvChange(index, "value", e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveEnv(index)}
+                            className="px-3 text-red-500 hover:bg-red-50 rounded-lg text-sm transition-colors"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
